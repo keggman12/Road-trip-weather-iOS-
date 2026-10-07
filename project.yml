@@ -1,0 +1,91 @@
+# XcodeGen manifest. Generate the project on the Mac with:
+#   brew install xcodegen
+#   xcodegen generate
+# Then open RoadTripWeather.xcodeproj, pick your Team, and enable the
+# WeatherKit capability on the App ID in the developer portal
+# (Certificates, Identifiers & Profiles → Identifiers → App ID →
+#  Capabilities AND App Services tabs). iCloud is optional; remove the
+# entitlement if you don't want sync.
+name: RoadTripWeather
+options:
+  bundleIdPrefix: com.keggman12
+  deploymentTarget:
+    iOS: "18.0"
+  xcodeVersion: "16.0"
+  createIntermediateGroups: true
+  generateEmptyDirectories: true
+
+settings:
+  base:
+    SWIFT_VERSION: "6.0"
+    SWIFT_STRICT_CONCURRENCY: complete
+    ENABLE_USER_SCRIPT_SANDBOXING: YES
+    DEVELOPMENT_TEAM: ""            # set in Xcode → Signing & Capabilities
+    CODE_SIGN_STYLE: Automatic
+
+packages:
+  RoadTripCore:
+    path: Packages/RoadTripCore
+
+targets:
+  RoadTripWeather:
+    type: application
+    platform: iOS
+    sources:
+      - path: RoadTripWeather
+        excludes:
+          - "**/*.md"
+    dependencies:
+      - package: RoadTripCore
+    info:
+      path: RoadTripWeather/Resources/Info.plist
+      properties:
+        CFBundleDisplayName: Road Trip Weather
+        CFBundleShortVersionString: "0.1.0"
+        CFBundleVersion: "1"
+        UILaunchScreen: {}
+        UISupportedInterfaceOrientations: [UIInterfaceOrientationPortrait]
+        UIUserInterfaceStyle: Dark
+        ITSAppUsesNonExemptEncryption: false
+        NSLocationWhenInUseUsageDescription: "Used only to center the map and suggest your current location as an origin."
+        LSApplicationQueriesSchemes: [waze, comgooglemaps]
+    entitlements:
+      path: RoadTripWeather/Resources/RoadTripWeather.entitlements
+      properties:
+        com.apple.developer.weatherkit: true
+        com.apple.developer.icloud-services: [CloudKit]
+        com.apple.developer.icloud-container-identifiers:
+          - iCloud.com.keggman12.RoadTripWeather
+        aps-environment: development
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: com.keggman12.RoadTripWeather
+        TARGETED_DEVICE_FAMILY: "1"
+        ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon
+        ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME: AccentColor
+
+  RoadTripWeatherTests:
+    type: bundle.unit-test
+    platform: iOS
+    sources:
+      - path: RoadTripWeatherTests
+    dependencies:
+      - target: RoadTripWeather
+      - package: RoadTripCore
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: com.keggman12.RoadTripWeatherTests
+
+schemes:
+  RoadTripWeather:
+    build:
+      targets:
+        RoadTripWeather: all
+        RoadTripWeatherTests: [test]
+    run:
+      config: Debug
+    test:
+      config: Debug
+      targets:
+        - RoadTripWeatherTests
+        - package: RoadTripCore/RoadTripCoreTests
