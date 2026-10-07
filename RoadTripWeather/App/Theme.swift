@@ -38,7 +38,8 @@ extension Color {
         var s = hex.trimmingCharacters(in: .whitespacesAndNewlines)
         if s.hasPrefix("#") { s.removeFirst() }
         guard s.count == 6, let v = UInt32(s, radix: 16) else {
-            self = Color(hex: TemperatureScale.unknownColorHex == hex ? "#6b7280" : "#6b7280")
+            // Malformed input → the web's "no data" grey.
+            self.init(red: 0x6b / 255, green: 0x72 / 255, blue: 0x80 / 255)
             return
         }
         self.init(

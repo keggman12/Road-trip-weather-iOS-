@@ -63,4 +63,4 @@ Love's) protect the existing file: on failure nothing is overwritten.
 
 ## Status
 
-Phase 1 in progress. `RoadTripCore` logic and tests land first; UI follows.
+Phase 1 in progress. `RoadTripCore` (85 tests, green on Linux and macOS) and the app target are written; first Xcode build and on-device verification happen on the Mac. The bundled POI snapshot is real data (57 Buc-ee's, 619 Love's, 3,622 rest areas) harvested 2026-10-07.
