@@ -37,3 +37,23 @@ public enum TripNaming {
         return vias.isEmpty ? base : base + " via " + vias.joined(separator: " · ")
     }
 }
+
+/// Names a stop from a reverse-geocoded place: "I-25 near Pueblo, CO".
+public enum StopNaming {
+    /// `road` is kept only when it looks like a numbered highway (has a digit).
+    public static func label(road: String?, town: String?, county: String?, state: String?) -> String? {
+        let place = [town ?? county, state].compactMap { $0 }.filter { !$0.isEmpty }.joined(separator: ", ")
+        let highway = road.flatMap { r in r.rangeOfCharacter(from: .decimalDigits) != nil ? r : nil }
+        switch (highway, place.isEmpty) {
+        case let (h?, false): return "\(h) near \(place)"
+        case (nil, false): return "near \(place)"
+        case let (h?, true): return h
+        case (nil, true): return nil
+        }
+    }
+
+    /// Rest-area names from OpenStreetMap are often just "Rest Area".
+    public static func isGeneric(_ name: String, kind: POIKind) -> Bool {
+        kind == .rest && ["rest area", "rest stop", "rest area/welcome center", ""].contains(name.lowercased().trimmingCharacters(in: .whitespaces))
+    }
+}

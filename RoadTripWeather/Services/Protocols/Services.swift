@@ -23,9 +23,28 @@ protocol RoutingService: Sendable {
     func routes(through points: [PlacePoint], departure: Date) async throws -> RoutingResult
 }
 
-/// Time zone for an arbitrary coordinate (sampled waypoints have none).
+/// Reverse-geocoded facts about a coordinate.
+struct PlaceInfo: Sendable {
+    var timeZone: TimeZone?
+    var road: String?
+    var town: String?
+    var county: String?
+    var state: String?
+
+    var stopLabel: String? { StopNaming.label(road: road, town: town, county: county, state: state) }
+}
+
+/// Time zone (and name) for an arbitrary coordinate (sampled waypoints have none).
 protocol TimeZoneService: Sendable {
     func timeZone(at coordinate: Coordinate) async -> TimeZone?
+    func place(at coordinate: Coordinate) async -> PlaceInfo?
+}
+
+extension TimeZoneService {
+    /// Services that only know zones (mocks) name nothing.
+    func place(at coordinate: Coordinate) async -> PlaceInfo? {
+        await timeZone(at: coordinate).map { PlaceInfo(timeZone: $0) }
+    }
 }
 
 struct ForecastResult: Sendable {

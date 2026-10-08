@@ -10,6 +10,8 @@ public enum StopKind: String, Codable, Sendable {
     case manual
     /// Added from a POI pin (keeps its `poiKind`).
     case poi
+    /// Placed by `StopPlanner` at a real Buc-ee's / Love's / rest area.
+    case planned
 
     public var isEndpoint: Bool { self == .origin || self == .destination }
     /// Web `isManual`: manual and POI stops.
@@ -52,6 +54,8 @@ public struct Stop: Hashable, Codable, Sendable, Identifiable {
     public var alerts: [WeatherAlert]
     /// Nearest Superchargers (EV vehicles with an OCM key; Phase 2).
     public var chargers: [Charger]
+    /// Planner caveat shown on the card ("Rest area — no fuel").
+    public var planNote: String?
 
     public init(
         id: UUID = UUID(),
@@ -75,7 +79,8 @@ public struct Stop: Hashable, Codable, Sendable, Identifiable {
         forecastFor: Date? = nil,
         horizon: ForecastHorizon = .failed,
         alerts: [WeatherAlert] = [],
-        chargers: [Charger] = []
+        chargers: [Charger] = [],
+        planNote: String? = nil
     ) {
         self.id = id
         self.kind = kind
@@ -99,6 +104,7 @@ public struct Stop: Hashable, Codable, Sendable, Identifiable {
         self.horizon = horizon
         self.alerts = alerts
         self.chargers = chargers
+        self.planNote = planNote
     }
 
     public var isOvernight: Bool { manualOvernight || autoOvernight }
@@ -125,6 +131,7 @@ extension Stop {
         if index == 0 { return "ORIGIN" }
         if index == total - 1 { return "DEST" }
         if kind.isUserAdded { return poiKind?.stopTag ?? "MANUAL" }
+        if kind == .planned, let poiKind { return poiKind.stopTag }
         return "STOP \(index)"
     }
 

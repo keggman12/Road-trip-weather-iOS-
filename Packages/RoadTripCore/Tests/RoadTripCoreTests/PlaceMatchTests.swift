@@ -23,3 +23,20 @@ struct PlaceMatchTests {
         #expect(TripNaming.defaultName(origin: "A", vias: ["B", "C"], destination: "D") == "A → D via B · C")
     }
 }
+
+@Suite("Stop naming")
+struct StopNamingTests {
+    @Test func labels() {
+        #expect(StopNaming.label(road: "I-25", town: "Pueblo", county: "Pueblo County", state: "CO") == "I-25 near Pueblo, CO")
+        #expect(StopNaming.label(road: "Main St", town: "Pueblo", county: nil, state: "CO") == "near Pueblo, CO")
+        #expect(StopNaming.label(road: nil, town: nil, county: "Fisher County", state: "TX") == "near Fisher County, TX")
+        #expect(StopNaming.label(road: "US-287", town: nil, county: nil, state: nil) == "US-287")
+        #expect(StopNaming.label(road: nil, town: nil, county: nil, state: nil) == nil)
+    }
+
+    @Test func genericRestAreaNames() {
+        #expect(StopNaming.isGeneric("Rest Area", kind: .rest))
+        #expect(!StopNaming.isGeneric("Raton Pass Welcome Center", kind: .rest))
+        #expect(!StopNaming.isGeneric("Rest Area", kind: .loves))
+    }
+}

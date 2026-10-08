@@ -103,17 +103,21 @@ extension MKMultiPoint {
 /// `CLGeocoder`, so lookups are serialized through this actor and cached by
 /// a ~1 km grid cell; a briefing never needs more than 25.
 actor CLTimeZoneService: TimeZoneService {
-    private var cache: [String: TimeZone] = [:]
+    private var cache: [String: PlaceInfo] = [:]
     private let geocoder = CLGeocoder()
 
     func timeZone(at coordinate: Coordinate) async -> TimeZone? {
+        await place(at: coordinate)?.timeZone
+    }
+
+    /// One reverse geocode gives both the zone and a stop name.
+    func place(at coordinate: Coordinate) async -> PlaceInfo? {
         let key = POINormalizer.dedupeKey(coordinate, decimals: 2)
         if let cached = cache[key] { return cached }
         let location = CLLocation(latitude: coordinate.latitude, longitude: coordinate.longitude)
-        guard let placemarks = try? await geocoder.reverseGeocodeLocation(location),
-              let tz = placemarks.first?.timeZone
-        else { return nil }
-        cache[key] = tz
-        return tz
+        guard let p = (try? await geocoder.reverseGeocodeLocation(location))?.first else { return nil }
+        let info = PlaceInfo(timeZone: p.timeZone, road: p.thoroughfare, town: p.locality, county: p.subAdministrativeArea, state: p.administrativeArea)
+        cache[key] = info
+        return info
     }
 }

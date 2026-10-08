@@ -16,6 +16,11 @@ struct StopCardView: View {
     let onRemove: () -> Void
 
     private var isInterior: Bool { index > 0 && index < total - 1 }
+    /// " · 0.4 mi off route" (or " · on route").
+    private var offRouteText: String {
+        guard let off = stop.offRouteMi else { return "" }
+        return off < 0.1 ? " · on route" : " · \(String(format: "%.1f", off)) mi off route"
+    }
     private var tempColor: Color { Color(hex: scale.colorHex(forTemperatureF: stop.weather.map { Double($0.temperatureF) })) }
 
     var body: some View {
@@ -25,7 +30,7 @@ struct StopCardView: View {
                 if let w = stop.weather {
                     Image(systemName: w.category.symbolName).foregroundStyle(w.category.badgeColor)
                 }
-                Text(stop.label).fontWeight(.semibold).lineLimit(1)
+                Text(stop.label).fontWeight(.semibold).lineLimit(2).fixedSize(horizontal: false, vertical: true)
                 Spacer()
                 if let w = stop.weather {
                     Text("\(w.temperatureF)°").font(.title3.monospacedDigit().weight(.bold)).foregroundStyle(tempColor)
@@ -51,6 +56,16 @@ struct StopCardView: View {
 
             if !stop.alerts.isEmpty {
                 FlowRow(items: stop.alerts.map { "⚠ \($0.event)" }, color: Theme.danger)
+            }
+
+            if let kind = stop.poiKind, kind.isFuel, stop.kind == .planned || stop.kind == .poi {
+                Label("Fuel stop\(offRouteText)", systemImage: "fuelpump.fill")
+                    .font(.caption).foregroundStyle(Theme.ok)
+            } else if stop.poiKind == .rest, stop.planNote == nil {
+                Label("Rest area\(offRouteText)", systemImage: "bed.double").font(.caption).foregroundStyle(Theme.muted)
+            }
+            if let note = stop.planNote {
+                Label(note, systemImage: "exclamationmark.triangle").font(.caption).foregroundStyle(Theme.warn)
             }
 
             if let charger = stop.chargers.first {

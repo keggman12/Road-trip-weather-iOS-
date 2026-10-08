@@ -35,6 +35,8 @@ final class BriefingCoordinator {
     var weatherAttributionURL: URL?
     /// Places that resolved to a different name than was typed.
     var placeNotices: [String] = []
+    /// StopPlanner candidates per route index (cleared with the routes).
+    var candidateCache: [Int: [StopPlanner.Candidate]] = [:]
     /// The saved trip the current plan came from, if any.
     var loadedTrip: TripRecord?
     /// Best-time-to-leave results (P2-4); never touches `briefings`.
@@ -130,6 +132,7 @@ final class BriefingCoordinator {
         routes = []
         routeNote = nil
         placeNotices = []
+        candidateCache = [:]
         selectedRouteIndex = -1
         briefings = [:]
         corridorPOIs = [:]
@@ -181,9 +184,10 @@ final class BriefingCoordinator {
     /// (optimizer candidates); `progress` replaces the briefing phase updates.
     func brief(routeIndex j: Int, label: String, departure: Date? = nil, withChargers: Bool = false, progress: ((Int, Int) -> Void)? = nil) async -> Briefing? {
         let route = routes[j]
-        let (stops0, totalMi) = StopListBuilder.initialStops(
+        let (stops0, totalMi) = StopPlanner.plan(
             route: route,
             rangeMi: plan.rangeMi,
+            candidates: await stopCandidates(routeIndex: j),
             originLabel: plan.origin?.label ?? plan.originText,
             destinationLabel: plan.destination?.label ?? plan.destinationText
         )
@@ -213,10 +217,33 @@ final class BriefingCoordinator {
         return b
     }
 
+    /// Fuel stops and rest areas in the route's corridor, projected onto it.
+    /// Cached per route: the optimizer re-plans the same route many times.
+    func stopCandidates(routeIndex j: Int) async -> [StopPlanner.Candidate] {
+        if let cached = candidateCache[j] { return cached }
+        let route = routes[j].coordinates
+        var pois: [POI] = []
+        for kind in POIKind.allCases {
+            if let all = try? await env.pois.pois(kind: kind) {
+                pois += CorridorFilter.filter(all, kind: kind, alongRoute: route)
+            }
+        }
+        let candidates = StopPlanner.candidates(route: route, pois: pois)
+        candidateCache[j] = candidates
+        return candidates
+    }
+
+    /// Time zone for every stop that lacks one, and a real name ("I-25 near
+    /// Pueblo, CO") for plain waypoints and generically named rest areas.
     private func resolveTimeZones(_ b: inout Briefing) async {
-        for i in b.stops.indices where b.stops[i].timeZoneID == nil {
-            if let tz = await env.timeZones.timeZone(at: b.stops[i].coordinate) {
-                b.stops[i].timeZoneID = tz.identifier
+        for i in b.stops.indices {
+            let s = b.stops[i]
+            let needsName = s.kind == .sampled || (s.poiKind.map { StopNaming.isGeneric(s.label, kind: $0) } ?? false)
+            guard s.timeZoneID == nil || needsName else { continue }
+            guard let info = await env.timeZones.place(at: s.coordinate) else { continue }
+            if s.timeZoneID == nil, let tz = info.timeZone { b.stops[i].timeZoneID = tz.identifier }
+            if needsName, let name = info.stopLabel {
+                b.stops[i].label = s.kind == .sampled ? name : "Rest area · \(name)"
             }
         }
     }

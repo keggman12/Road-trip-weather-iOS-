@@ -78,7 +78,7 @@ struct BriefingAcceptanceTests {
 
         for i in 0...2 { #expect(after.stops[i].eta == before.stops[i].eta, "stop \(i) must not move") }
         for i in 3..<after.stops.count {
-            #expect(after.stops[i].eta.timeIntervalSince(before.stops[i].eta) == 45 * 60, "stop \(i) shifts by the dwell delta")
+            #expect(abs(after.stops[i].eta.timeIntervalSince(before.stops[i].eta) - 45 * 60) < 0.01, "stop \(i) shifts by the dwell delta")
             #expect(after.stops[i].isForecastStale)
         }
         #expect(after.staleStops.count == after.stops.count - 3)

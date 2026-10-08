@@ -56,7 +56,7 @@ struct ManualStopTests {
         for old in before.stops {
             let now = try #require(after.stops.first { $0.id == old.id })
             let shift = now.eta.timeIntervalSince(old.eta)
-            #expect(shift == (old.distanceMi > added.distanceMi ? 15 * 60 : 0), "\(old.label)")
+            #expect(abs(shift - (old.distanceMi > added.distanceMi ? 15 * 60 : 0)) < 0.01, "\(old.label)")
         }
         #expect(c.env.trips.draftBriefings().first?.stops.contains { $0.id == added.id } == true, "persisted")
     }

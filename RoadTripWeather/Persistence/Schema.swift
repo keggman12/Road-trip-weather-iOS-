@@ -118,6 +118,7 @@ final class StopRecord {
     var horizonRaw: String = "failed"
     /// JSON `[Charger]`, nil when there are none.
     var chargersData: Data?
+    var planNote: String?
     @Relationship(deleteRule: .cascade, inverse: \WeatherSnapshotRecord.stop) var weather: WeatherSnapshotRecord?
     @Relationship(deleteRule: .nullify, inverse: \AlertRecord.stops) var alerts: [AlertRecord]?
 

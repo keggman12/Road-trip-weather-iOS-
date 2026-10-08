@@ -98,6 +98,9 @@ struct BriefingView: View {
                 PrecipTimelineView(stops: briefing.stops)
 
                 Text("Stops").font(.headline).padding(.top, 4)
+                if let plan = StopPlanner.summary(for: briefing.stops, rangeMi: briefing.rangeMi) {
+                    Label(plan, systemImage: "fuelpump").font(.caption).foregroundStyle(Theme.muted)
+                }
                 AddStopField(text: $newStopText, busy: coordinator.isBusy) {
                     Task { if await coordinator.addStop(named: newStopText) { newStopText = "" } }
                 }

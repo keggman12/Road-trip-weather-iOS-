@@ -87,7 +87,14 @@ xcodebuild -project RoadTripWeather.xcodeproj -scheme RoadTripWeather \
 - NWS User-Agent = app name + repo URL (+ optional email from Settings).
 - NWS retries only 429, 5xx and transient network errors (the web never retried).
 - The OCM key goes in the `X-API-Key` header, not the URL (the web put it in the query).
-- The optimizer scores sampled waypoints only (no user edits, no chargers), like the web.
+- The optimizer scores planned stops only (no user edits, no chargers), like the web.
+- **Stops are planned at real places** (`StopPlanner`, owner decision 2026-10-08; the web
+  sampled every `range` miles): each leg ends at the farthest Buc-ee's/Love's within **90 %** of
+  range, counting the off-route detour; a rest area (flagged "no fuel") only when no fuel is in
+  reach; else a plain waypoint at the 90 % point with a warning. Plain waypoints and generic
+  rest areas are named by reverse geocoding ("I-25 S near Rye, CO"); Apple has no mile markers.
+- Geocoded places whose name differs from what was typed are flagged (e.g. "Rotan, New Mexico"
+  → Raton, NM). A new search detaches from the loaded saved trip; default names include vias.
 
 ## 5. Architecture in one minute
 
