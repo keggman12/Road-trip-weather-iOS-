@@ -74,30 +74,41 @@ struct PlanView: View {
                 }
             }
 
-            Section {
-                Button {
-                    Task {
-                        await coordinator.findRoutes()
-                        if !coordinator.routes.isEmpty { showRoutes = true }
+            if coordinator.errorMessage != nil || !coordinator.routes.isEmpty {
+                Section {
+                    if let e = coordinator.errorMessage {
+                        Text(e).foregroundStyle(Theme.danger).font(.footnote)
                     }
-                } label: {
-                    HStack {
-                        if coordinator.isBusy { ProgressView().controlSize(.small) }
-                        Text(buttonTitle).fontWeight(.semibold)
+                    if !coordinator.routes.isEmpty {
+                        Button("Show routes") { showRoutes = true }
                     }
-                    .frame(maxWidth: .infinity)
-                }
-                .disabled(!coordinator.canFindRoutes)
-                if let e = coordinator.errorMessage {
-                    Text(e).foregroundStyle(Theme.danger).font(.footnote)
-                }
-                if !coordinator.routes.isEmpty {
-                    Button("Show routes") { showRoutes = true }
                 }
             }
         }
         .scrollContentBackground(.hidden)
         .scrollDismissesKeyboard(.interactively)
+        // Pinned above the tab bar: as the form's last row it sat behind the
+        // floating tab bar until you scrolled.
+        .safeAreaInset(edge: .bottom) {
+            Button {
+                Task {
+                    await coordinator.findRoutes()
+                    if !coordinator.routes.isEmpty { showRoutes = true }
+                }
+            } label: {
+                HStack {
+                    if coordinator.isBusy { ProgressView().controlSize(.small).tint(Theme.background) }
+                    Text(buttonTitle).fontWeight(.semibold)
+                }
+                .foregroundStyle(Theme.background)   // dark on the light accent
+                .frame(maxWidth: .infinity)
+            }
+            .buttonStyle(.borderedProminent)
+            .controlSize(.large)
+            .disabled(!coordinator.canFindRoutes)
+            .padding(.horizontal)
+            .padding(.vertical, 8)
+        }
         .background(Theme.background)
         .navigationTitle("Road Trip Weather")
         .toolbar {

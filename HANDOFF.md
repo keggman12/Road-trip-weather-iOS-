@@ -62,6 +62,8 @@ xcodebuild -project RoadTripWeather.xcodeproj -scheme RoadTripWeather \
 - The first launch after a cold simulator boot shows ~5 s of black — that is the simulator, not
   the app. Measured: the app's launch path is 275 ms on a fresh install; the bundled POI import
   (~215 ms) now runs on a background `@ModelActor` (`POISnapshotImporter`).
+- The simulator tool's instant taps don't flip iOS 26 switches; use a tap with
+  `duration: 0.1`+ or a drag. Real taps work — it isn't an app bug.
 - Two plain `Button`s in one `Form` row both fire on any tap (Apply also ran Reset); use
   `.buttonStyle(.borderless)` for multi-button rows.
 - `DataSourceStatusStore.status(_:)` and `POIStore.meta(for:)` are read-only on purpose so rendering can't insert rows or race the
@@ -117,9 +119,7 @@ xcodebuild -project RoadTripWeather.xcodeproj -scheme RoadTripWeather \
    matrix), P2-5 Superchargers (Open Charge Map, parsing pinned to the web via `gen-ocm.mjs`).
    **Not yet checked with a real OCM key** — add one in Settings, pick the Tesla vehicle, brief
    a route, and confirm the "⚡ Supercharger" line on stop cards and the Data Sources row.
-2. Polish noticed in the simulator, not yet done: the Find Routes button sits under the floating
-   tab bar until you scroll; the overnight toggle on stop cards has no visible label; wind text
-   truncates on stop cards.
+2. Try Superchargers with a real OCM key (see 1), then TestFlight.
 
 ## 7. Conventions
 

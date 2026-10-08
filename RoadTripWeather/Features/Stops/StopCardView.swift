@@ -67,17 +67,27 @@ struct StopCardView: View {
             }
 
             if isInterior {
-                HStack(spacing: 14) {
-                    Stepper(value: Binding(get: { stop.dwellMinutes }, set: { onDwell($0) }), in: 0...600, step: 5) {
-                        Text("Dwell \(stop.dwellMinutes) min").font(.caption.monospacedDigit())
+                Divider().overlay(Theme.muted.opacity(0.3))
+                Stepper(value: Binding(get: { stop.dwellMinutes }, set: { onDwell($0) }), in: 0...600, step: 5) {
+                    Text("Dwell \(stop.dwellMinutes) min").font(.caption.monospacedDigit())
+                }
+                HStack(spacing: 12) {
+                    Toggle(isOn: Binding(get: { stop.isOvernight }, set: { onOvernight($0) })) {
+                        VStack(alignment: .leading, spacing: 0) {
+                            Text("Stay overnight here").font(.caption)
+                            if stop.autoOvernight {
+                                Text("Set automatically — daily drive limit reached").font(.caption2).foregroundStyle(Theme.muted)
+                            }
+                        }
                     }
-                    Toggle(isOn: Binding(get: { stop.manualOvernight }, set: { onOvernight($0) })) {
-                        Text(stop.autoOvernight ? "Overnight (auto)" : "Overnight").font(.caption)
-                    }
-                    .disabled(stop.autoOvernight)
                     .toggleStyle(.switch)
-                    .labelsHidden()
-                    Button(role: .destructive, action: onRemove) { Image(systemName: "xmark") }.buttonStyle(.plain).foregroundStyle(Theme.muted)
+                    .disabled(stop.autoOvernight)
+                    Button(role: .destructive, action: onRemove) {
+                        Label("Remove", systemImage: "xmark.circle").font(.caption)
+                    }
+                    .buttonStyle(.bordered)
+                    .controlSize(.small)
+                    .accessibilityLabel("Remove \(stop.label)")
                 }
             }
         }
@@ -99,7 +109,10 @@ struct StopCardView: View {
         chips.append("Feels \(w.feelsLikeF)°")
         if let h = w.humidityPercent { chips.append("Humidity \(h)%") }
         if let p = w.precipitationPercent { chips.append("Precip \(p)%") }
-        if !w.conditionText.isEmpty { chips.append(w.conditionText) }
+        // WeatherKit's description often repeats the category ("Clear").
+        if !w.conditionText.isEmpty, w.conditionText.caseInsensitiveCompare(w.category.label) != .orderedSame {
+            chips.append(w.conditionText)
+        }
         if index > 0 {
             let over = stop.legExceedsRange(rangeMi)
             chips.append("\(over ? "⚠ " : "")+\(Int(stop.legMi.rounded())) mi leg")
@@ -110,18 +123,73 @@ struct StopCardView: View {
 }
 
 /// Simple wrapping row of caption chips.
+/// Chips that wrap to the next line at their natural width (the old
+/// fixed-column grid truncated "Wind 11 mph S · headwind").
 struct FlowRow: View {
     let items: [String]
     let color: Color
 
     var body: some View {
-        LazyVGrid(columns: [GridItem(.adaptive(minimum: 110), alignment: .leading)], alignment: .leading, spacing: 4) {
+        FlowLayout(horizontalSpacing: 14, verticalSpacing: 4) {
             ForEach(items, id: \.self) { item in
                 Text(item)
                     .font(.caption.monospacedDigit())
                     .foregroundStyle(item.hasPrefix("⚠") ? Theme.danger : color)
-                    .lineLimit(1)
             }
         }
+    }
+}
+
+/// Left-aligned wrapping layout: each subview gets its ideal width (capped
+/// at the row width, where it may wrap its own text) and moves to a new line
+/// when it doesn't fit.
+struct FlowLayout: Layout {
+    var horizontalSpacing: CGFloat = 8
+    var verticalSpacing: CGFloat = 4
+
+    func sizeThatFits(proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) -> CGSize {
+        let rows = arrange(subviews, maxWidth: proposal.width ?? .infinity)
+        let width = rows.map(\.width).max() ?? 0
+        let height = rows.map(\.height).reduce(0, +) + verticalSpacing * CGFloat(max(0, rows.count - 1))
+        return CGSize(width: proposal.width ?? width, height: height)
+    }
+
+    func placeSubviews(in bounds: CGRect, proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) {
+        var y = bounds.minY
+        for row in arrange(subviews, maxWidth: bounds.width) {
+            var x = bounds.minX
+            for item in row.items {
+                subviews[item.index].place(at: CGPoint(x: x, y: y), proposal: ProposedViewSize(item.size))
+                x += item.size.width + horizontalSpacing
+            }
+            y += row.height + verticalSpacing
+        }
+    }
+
+    private struct Row {
+        var items: [(index: Int, size: CGSize)] = []
+        var width: CGFloat = 0
+        var height: CGFloat = 0
+    }
+
+    private func arrange(_ subviews: Subviews, maxWidth: CGFloat) -> [Row] {
+        var rows: [Row] = []
+        var row = Row()
+        for i in subviews.indices {
+            var size = subviews[i].sizeThatFits(.unspecified)
+            if size.width > maxWidth {
+                size = subviews[i].sizeThatFits(ProposedViewSize(width: maxWidth, height: nil))
+            }
+            let needed = row.items.isEmpty ? size.width : row.width + horizontalSpacing + size.width
+            if !row.items.isEmpty && needed > maxWidth {
+                rows.append(row)
+                row = Row()
+            }
+            row.width = row.items.isEmpty ? size.width : row.width + horizontalSpacing + size.width
+            row.height = max(row.height, size.height)
+            row.items.append((i, size))
+        }
+        if !row.items.isEmpty { rows.append(row) }
+        return rows
     }
 }
