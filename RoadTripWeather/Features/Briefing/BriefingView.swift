@@ -99,7 +99,7 @@ struct BriefingView: View {
 
                 if let url = coordinator.weatherAttributionURL ?? briefing.weatherAttributionURL.flatMap(URL.init(string:)) {
                     Link(destination: url) {
-                        Label("Weather data by  Weather", systemImage: "apple.logo").font(.caption).foregroundStyle(Theme.muted)
+                        Text("Weather data by \u{F8FF} Weather · Legal").font(.caption).foregroundStyle(Theme.muted)
                     }
                     .padding(.top, 8)
                 }

@@ -120,6 +120,10 @@ final class BriefingCoordinator {
             plan.stopEdits = StopEdits()
         }
         if weatherAttributionURL == nil { weatherAttributionURL = await env.weather.attributionURL() }
+        // Persisted with the briefing so a cached trip can show it offline.
+        if let url = weatherAttributionURL?.absoluteString {
+            for j in indices { briefings[j]?.weatherAttributionURL = url }
+        }
         await refreshPOILayers()
         phase = .idle
         if let b = briefing {
