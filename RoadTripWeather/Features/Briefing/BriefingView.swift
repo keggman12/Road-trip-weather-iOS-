@@ -11,6 +11,7 @@ struct BriefingView: View {
     @State private var tripName = ""
     @State private var selectedPOI: POI?
     @State private var newStopText = ""
+    @State private var showOptimizer = false
 
     var body: some View {
         Group {
@@ -28,6 +29,8 @@ struct BriefingView: View {
                 Menu {
                     Button { tripName = coordinator.plan.defaultName; showSave = true } label: { Label("Save trip", systemImage: "bookmark") }
                     Button { Task { await coordinator.refreshForecasts() } } label: { Label("Refresh forecasts", systemImage: "arrow.clockwise") }
+                    Button { showOptimizer = true } label: { Label("Best time to leave…", systemImage: "clock.arrow.2.circlepath") }
+                        .disabled(coordinator.optimizableRouteIndices.isEmpty)
                     if let export = coordinator.gpxExport {
                         ShareLink(item: export, preview: SharePreview(export.fileName)) {
                             Label("Export GPX", systemImage: "square.and.arrow.up")
@@ -48,6 +51,9 @@ struct BriefingView: View {
             TextField("Name", text: $tripName)
             Button("Save") { try? coordinator.save(name: tripName) }
             Button("Cancel", role: .cancel) {}
+        }
+        .sheet(isPresented: $showOptimizer) {
+            OptimizerView(coordinator: coordinator)
         }
         .sheet(item: $selectedPOI) { poi in
             POICalloutView(poi: poi, briefing: coordinator.briefing) {

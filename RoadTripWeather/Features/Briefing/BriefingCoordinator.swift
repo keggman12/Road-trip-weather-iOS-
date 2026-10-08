@@ -14,6 +14,7 @@ final class BriefingCoordinator {
         case routing
         case briefing(done: Int, total: Int, routeLabel: String)
         case refreshing(done: Int, total: Int)
+        case optimizing(done: Int, total: Int)
     }
 
     let env: AppEnvironment
@@ -34,6 +35,9 @@ final class BriefingCoordinator {
     var weatherAttributionURL: URL?
     /// The saved trip the current plan came from, if any.
     var loadedTrip: TripRecord?
+    /// Best-time-to-leave results (P2-4); never touches `briefings`.
+    var optimizer: OptimizerResult?
+    var optimizerTask: Task<Void, Never>?
 
     init(env: AppEnvironment) {
         self.env = env
@@ -156,7 +160,9 @@ final class BriefingCoordinator {
         }
     }
 
-    private func brief(routeIndex j: Int, label: String) async -> Briefing? {
+    /// Builds one route's briefing off-screen. `departure` overrides the plan's
+    /// (optimizer candidates); `progress` replaces the briefing phase updates.
+    func brief(routeIndex j: Int, label: String, departure: Date? = nil, progress: ((Int, Int) -> Void)? = nil) async -> Briefing? {
         let route = routes[j]
         let (stops0, totalMi) = StopListBuilder.initialStops(
             route: route,
@@ -169,7 +175,7 @@ final class BriefingCoordinator {
             routeLabel: route.label,
             geometry: route,
             totalMi: totalMi,
-            departure: plan.departure,
+            departure: departure ?? plan.departure,
             departureTimeZoneID: plan.departureTimeZoneID,
             rangeMi: Vehicle.clampRange(plan.rangeMi),
             multiDay: plan.multiDay,
@@ -181,11 +187,11 @@ final class BriefingCoordinator {
         if b.stops.count > 1 { b.stops[b.stops.count - 1].timeZoneID = plan.destination?.timeZoneID }
         ETACalculator.recompute(&b, fallbackTimeZone: plan.departureTimeZone)
 
-        phase = .briefing(done: 0, total: b.stops.count, routeLabel: label)
+        if progress == nil { phase = .briefing(done: 0, total: b.stops.count, routeLabel: label) }
         await resolveTimeZones(&b)
         // Time zones can change overnight resume times, so recompute.
         ETACalculator.recompute(&b, fallbackTimeZone: plan.departureTimeZone)
-        await fetchWeather(for: &b, indices: Array(b.stops.indices), routeLabel: label)
+        await fetchWeather(for: &b, indices: Array(b.stops.indices), routeLabel: label, progress: progress)
         b.generatedAt = Date()
         return b
     }
@@ -200,7 +206,8 @@ final class BriefingCoordinator {
 
     /// Fetches weather + alerts for the given stops concurrently (web
     /// `fetchStopWeather`). Failures leave `weather == nil`, `horizon == .failed`.
-    private func fetchWeather(for b: inout Briefing, indices: [Int], routeLabel: String) async {
+    /// `progress(done, total)` defaults to the briefing phase for `routeLabel`.
+    func fetchWeather(for b: inout Briefing, indices: [Int], routeLabel: String, progress: ((Int, Int) -> Void)? = nil) async {
         let total = indices.count
         var done = 0
         let snapshot = b
@@ -219,7 +226,7 @@ final class BriefingCoordinator {
             for await r in group {
                 out.append(r)
                 done += 1
-                phase = .briefing(done: done, total: total, routeLabel: routeLabel)
+                if let progress { progress(done, total) } else { phase = .briefing(done: done, total: total, routeLabel: routeLabel) }
             }
             return out
         }
@@ -277,7 +284,9 @@ final class BriefingCoordinator {
     func refreshForecasts() async {
         guard var b = briefing else { return }
         phase = .refreshing(done: 0, total: b.stops.count)
-        await fetchWeather(for: &b, indices: Array(b.stops.indices), routeLabel: b.routeLabel ?? "")
+        await fetchWeather(for: &b, indices: Array(b.stops.indices), routeLabel: b.routeLabel ?? "") { [weak self] done, total in
+            self?.phase = .refreshing(done: done, total: total)
+        }
         b.generatedAt = Date()
         briefings[selectedRouteIndex] = b
         persistSession()
@@ -328,7 +337,9 @@ final class BriefingCoordinator {
             ETACalculator.recompute(&b, fallbackTimeZone: plan.departureTimeZone)
         }
         phase = .refreshing(done: 0, total: 1)
-        await fetchWeather(for: &b, indices: [i], routeLabel: b.routeLabel ?? "")
+        await fetchWeather(for: &b, indices: [i], routeLabel: b.routeLabel ?? "") { [weak self] done, total in
+            self?.phase = .refreshing(done: done, total: total)
+        }
         briefings[selectedRouteIndex] = b
         persistSession()
         phase = .idle
