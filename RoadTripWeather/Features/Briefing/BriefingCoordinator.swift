@@ -290,11 +290,39 @@ final class BriefingCoordinator {
         await addStop(ManualStopEdit(coordinate: poi.coordinate, label: poi.name, poiKind: poi.kind, poiSourceID: poi.sourceID))
     }
 
-    func addStop(_ edit: ManualStopEdit) async {
-        guard var b = briefing else { errorMessage = "Generate a briefing first."; return }
-        guard let stop = StopEditReplayer.insert(edit, into: &b) else { errorMessage = "Couldn't project onto the route."; return }
+    /// Web `addManualStop`: geocode typed text, insert it as a manual stop
+    /// snapped to the route, fetch its forecast. Returns false (and changes
+    /// nothing) when the place can't be found.
+    @discardableResult
+    func addStop(named text: String) async -> Bool {
+        let query = text.trimmingCharacters(in: .whitespaces)
+        guard !query.isEmpty else { return false }
+        guard briefing != nil else { errorMessage = "Generate a briefing first."; return false }
+        errorMessage = nil
+        phase = .geocoding(query)
+        env.status.countCall(.mapkit)
+        let place: PlacePoint
+        do {
+            place = try await env.geocoding.geocode(query)
+            env.status.recordSuccess(.mapkit, count: 1)
+        } catch {
+            env.status.recordError(.mapkit, error.localizedDescription)
+            errorMessage = error.localizedDescription
+            phase = .idle
+            return false
+        }
+        phase = .idle
+        guard await addStop(ManualStopEdit(coordinate: place.coordinate, label: place.label)) else { return false }
+        env.settings.remember(query)
+        return true
+    }
+
+    @discardableResult
+    func addStop(_ edit: ManualStopEdit) async -> Bool {
+        guard var b = briefing else { errorMessage = "Generate a briefing first."; return false }
+        guard let stop = StopEditReplayer.insert(edit, into: &b) else { errorMessage = "Couldn't project onto the route."; return false }
         ETACalculator.recompute(&b, fallbackTimeZone: plan.departureTimeZone)
-        guard let i = b.stops.firstIndex(where: { $0.id == stop.id }) else { return }
+        guard let i = b.stops.firstIndex(where: { $0.id == stop.id }) else { return false }
         if b.stops[i].timeZoneID == nil, let tz = await env.timeZones.timeZone(at: b.stops[i].coordinate) {
             b.stops[i].timeZoneID = tz.identifier
             ETACalculator.recompute(&b, fallbackTimeZone: plan.departureTimeZone)
@@ -306,6 +334,7 @@ final class BriefingCoordinator {
         phase = .idle
         let off = stop.offRouteMi ?? 0
         statusMessage = "Added “\(edit.label)” (\(off < 1 ? "snapped to route" : "~\(Int(off.rounded())) mi off route"))."
+        return true
     }
 
     private func replayEdits(_ edits: StopEdits, into b: inout Briefing) async {

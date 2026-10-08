@@ -10,6 +10,7 @@ struct BriefingView: View {
     @State private var showSave = false
     @State private var tripName = ""
     @State private var selectedPOI: POI?
+    @State private var newStopText = ""
 
     var body: some View {
         Group {
@@ -88,6 +89,9 @@ struct BriefingView: View {
                 PrecipTimelineView(stops: briefing.stops)
 
                 Text("Stops").font(.headline).padding(.top, 4)
+                AddStopField(text: $newStopText, busy: coordinator.isBusy) {
+                    Task { if await coordinator.addStop(named: newStopText) { newStopText = "" } }
+                }
                 ForEach(Array(briefing.stops.enumerated()), id: \.element.id) { i, stop in
                     StopCardView(
                         stop: stop,
@@ -111,6 +115,30 @@ struct BriefingView: View {
             }
             .padding()
         }
+    }
+}
+
+/// Web `manualStopInput`: type a place, it's snapped onto the route.
+struct AddStopField: View {
+    @Binding var text: String
+    let busy: Bool
+    let add: () -> Void
+
+    var body: some View {
+        HStack {
+            TextField("Add a stop (city, address, place)", text: $text)
+                .textInputAutocapitalization(.words)
+                .autocorrectionDisabled()
+                .submitLabel(.done)
+                .onSubmit(add)
+            Button(action: add) {
+                if busy { ProgressView().controlSize(.small) } else { Image(systemName: "plus.circle.fill").font(.title3) }
+            }
+            .disabled(busy || text.trimmingCharacters(in: .whitespaces).isEmpty)
+            .accessibilityLabel("Add stop")
+        }
+        .padding(10)
+        .background(Theme.surface, in: RoundedRectangle(cornerRadius: 10))
     }
 }
 
