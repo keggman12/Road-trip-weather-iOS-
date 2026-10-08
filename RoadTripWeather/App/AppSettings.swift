@@ -71,6 +71,15 @@ final class AppSettings {
         set { defaults.set(newValue.map { JSONCoding.encode($0) }, forKey: AppSettings.sessionKey) }
     }
 
+    /// Web `applyScaleFromEditor`: bounds forced monotonic, last band open.
+    func applyScale(_ draft: TemperatureScale) {
+        temperatureScale = draft.normalized()
+    }
+
+    func resetScale() {
+        temperatureScale = .default
+    }
+
     func remember(_ texts: String...) {
         recentLocations = RecentLocations.remember(texts, into: recentLocations)
     }

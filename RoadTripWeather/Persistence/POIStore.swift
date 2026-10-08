@@ -37,6 +37,9 @@ final class POIStore: POIService {
         importTask = Task {
             let outcome = await importer.importIfNeeded(snapshotURL: url)
             if let error = outcome.loadError { statusStore.recordError(.bundledSnapshot, error) }
+            if !outcome.imported.isEmpty {
+                statusStore.recordSuccess(.bundledSnapshot, count: outcome.imported.reduce(0) { $0 + $1.1 })
+            }
             for (kind, count) in outcome.imported { statusStore.recordSuccess(DataSource(kind), count: count) }
             for (kind, error) in outcome.failed { statusStore.recordError(DataSource(kind), error) }
         }
@@ -64,17 +67,25 @@ final class POIStore: POIService {
         await importTask?.value
         let meta = metaRecord(for: kind)
         meta.lastAttemptAt = Date()
+        statusStore.countCall(DataSource(kind))
         do {
             let fetched = try await refresher.fetch(kind: kind)
-            replace(kind: kind, with: fetched.pois, source: fetched.source, snapshotVersion: meta.snapshotVersion, fetchedAt: Date())
+            if fetched.source == .osm {
+                statusStore.countCall(.overpass)
+                statusStore.recordSuccess(.overpass, count: fetched.pois.count)
+            }
+            let stored = replace(kind: kind, with: fetched.pois, source: fetched.source, snapshotVersion: meta.snapshotVersion, fetchedAt: Date())
             meta.lastError = fetched.officialError.map { "Official site failed (\($0)); used OpenStreetMap." }
             try? context.save()
-            statusStore.recordSuccess(DataSource(kind), count: fetched.pois.count)
-            return POIRefreshOutcome(kind: kind, count: fetched.pois.count, source: fetched.source)
+            return POIRefreshOutcome(kind: kind, count: stored ?? fetched.pois.count, source: fetched.source)
         } catch {
-            meta.lastError = String(describing: error)
+            if let both = error as? POIRefreshService.BothSourcesFailed {
+                statusStore.countCall(.overpass)
+                statusStore.recordError(.overpass, both.overpassError)
+            }
+            meta.lastError = error.localizedDescription
             try? context.save()
-            statusStore.recordError(DataSource(kind), String(describing: error))
+            statusStore.recordError(DataSource(kind), error.localizedDescription)
             throw error
         }
     }
@@ -98,7 +109,6 @@ final class POIStore: POIService {
         let filtered = POINormalizer.dedupe(pois.filter { $0.kind == kind })
         guard !filtered.isEmpty else { throw ServiceError.badPayload("import file (no \(kind.displayName) rows)") }
         replace(kind: kind, with: filtered, source: .imported, snapshotVersion: metaRecord(for: kind).snapshotVersion, fetchedAt: Date())
-        statusStore.recordSuccess(DataSource(kind), count: filtered.count)
     }
 
     // MARK: Internals
@@ -107,12 +117,16 @@ final class POIStore: POIService {
         POIWriter.metaRecord(for: kind, in: context)
     }
 
-    private func replace(kind: POIKind, with pois: [POI], source: POISource, snapshotVersion: String, fetchedAt: Date) {
+    /// Writes the rows and records the kind's status; nil when the write failed.
+    @discardableResult
+    private func replace(kind: POIKind, with pois: [POI], source: POISource, snapshotVersion: String, fetchedAt: Date) -> Int? {
         do {
-            try POIWriter.replace(kind: kind, with: pois, source: source, snapshotVersion: snapshotVersion, fetchedAt: fetchedAt, in: context)
-            statusStore.recordSuccess(DataSource(kind), count: pois.count)
+            let stored = try POIWriter.replace(kind: kind, with: pois, source: source, snapshotVersion: snapshotVersion, fetchedAt: fetchedAt, in: context)
+            statusStore.recordSuccess(DataSource(kind), count: stored)
+            return stored
         } catch {
             statusStore.recordError(DataSource(kind), String(describing: error))
+            return nil
         }
     }
 }
@@ -133,22 +147,26 @@ enum POIWriter {
     }
 
     /// Single transaction: delete the kind's rows, insert the new ones,
-    /// update meta. SwiftData's `transaction` rolls back on throw.
-    static func replace(kind: POIKind, with pois: [POI], source: POISource, snapshotVersion: String, fetchedAt: Date, in context: ModelContext) throws {
+    /// update meta. SwiftData's `transaction` rolls back on throw. Returns
+    /// the number of rows stored (after the ~1 km dedupe).
+    @discardableResult
+    static func replace(kind: POIKind, with pois: [POI], source: POISource, snapshotVersion: String, fetchedAt: Date, in context: ModelContext) throws -> Int {
         let raw = kind.rawValue
+        let unique = POINormalizer.dedupe(pois)
         try context.transaction {
             try context.delete(model: POIRecord.self, where: #Predicate { $0.kindRaw == raw })
             let now = Date()
-            for p in POINormalizer.dedupe(pois) {
+            for p in unique {
                 context.insert(POIMapper.record(from: p, source: source, updatedAt: now))
             }
             let meta = metaRecord(for: kind, in: context)
             meta.lastUpdated = fetchedAt
-            meta.count = pois.count
+            meta.count = unique.count
             meta.sourceRaw = source.rawValue
             meta.snapshotVersion = snapshotVersion
             meta.lastError = nil
         }
+        return unique.count
     }
 }
 
@@ -179,8 +197,8 @@ actor POISnapshotImporter {
             let bundledAndOlder = meta?.sourceRaw == POISource.bundled.rawValue && meta?.snapshotVersion != version
             guard neverLoaded || bundledAndOlder else { continue }
             do {
-                try POIWriter.replace(kind: kind, with: payload.pois, source: .bundled, snapshotVersion: version, fetchedAt: payload.fetchedAt, in: modelContext)
-                outcome.imported.append((kind, payload.pois.count))
+                let stored = try POIWriter.replace(kind: kind, with: payload.pois, source: .bundled, snapshotVersion: version, fetchedAt: payload.fetchedAt, in: modelContext)
+                outcome.imported.append((kind, stored))
             } catch {
                 outcome.failed.append((kind, String(describing: error)))
             }

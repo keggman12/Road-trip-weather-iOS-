@@ -123,6 +123,38 @@ final class TripStore {
     /// Seeds the web defaults once.
     func seedVehiclesIfNeeded() {
         guard vehicles().isEmpty else { return }
+        insertDefaultVehicles()
+    }
+
+    @discardableResult
+    func addVehicle() -> VehicleRecord {
+        let v = VehicleRecord(name: "New vehicle", rangeMi: 300, isEV: false, sortOrder: (vehicles().last?.sortOrder ?? -1) + 1)
+        context.insert(v)
+        try? context.save()
+        return v
+    }
+
+    /// Web keeps at least one vehicle: a delete that would empty the garage
+    /// is refused. Returns whether anything was deleted.
+    @discardableResult
+    func deleteVehicles(_ doomed: [VehicleRecord]) -> Bool {
+        guard !doomed.isEmpty, vehicles().count - doomed.count >= 1 else { return false }
+        for v in doomed { context.delete(v) }
+        try? context.save()
+        return true
+    }
+
+    func setRange(_ miles: Double, for vehicle: VehicleRecord) {
+        vehicle.rangeMi = Vehicle.clampRange(miles)
+        try? context.save()
+    }
+
+    func resetVehicles() {
+        for v in vehicles() { context.delete(v) }
+        insertDefaultVehicles()
+    }
+
+    private func insertDefaultVehicles() {
         for (i, v) in Vehicle.defaults.enumerated() {
             context.insert(VehicleRecord(name: v.name, rangeMi: v.rangeMi, isEV: v.isEV, sortOrder: i, isBuiltIn: true))
         }

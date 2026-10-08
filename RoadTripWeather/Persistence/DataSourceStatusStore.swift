@@ -67,8 +67,20 @@ final class DataSourceStatusStore {
         revision += 1
     }
 
-    func status(_ source: DataSource) -> DataSourceStatusRecord {
-        record(source)
+    /// Counts one call and records its outcome (`count` = records returned).
+    func record(_ source: DataSource, result: Result<Int, Error>) {
+        countCall(source)
+        switch result {
+        case let .success(n): recordSuccess(source, count: n)
+        case let .failure(e): recordError(source, e.localizedDescription)
+        }
+    }
+
+    /// Read-only: views call this while rendering, so it must not insert.
+    func status(_ source: DataSource) -> DataSourceStatusRecord? {
+        let raw = source.rawValue
+        let descriptor = FetchDescriptor<DataSourceStatusRecord>(predicate: #Predicate { $0.sourceRaw == raw })
+        return (try? container.mainContext.fetch(descriptor))?.first
     }
 
     private func record(_ source: DataSource) -> DataSourceStatusRecord {

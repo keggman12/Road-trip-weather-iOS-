@@ -60,13 +60,7 @@ final class AppEnvironment {
         let version = AppSettings.appVersion
         let status = Box<DataSourceStatusStore?>(nil)
         let nws = NWSAlertService(contactEmail: settings.nwsContact, appVersion: version) { result in
-            Task { @MainActor in
-                switch result {
-                case let .success(n): status.value?.recordSuccess(.nws, count: n)
-                case let .failure(e): status.value?.recordError(.nws, e.localizedDescription)
-                }
-                status.value?.countCall(.nws)
-            }
+            Task { @MainActor in status.value?.record(.nws, result: result) }
         }
         let overpass = OverpassClient(appVersion: version)
         let env = AppEnvironment(

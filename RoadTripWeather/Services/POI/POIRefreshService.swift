@@ -25,6 +25,17 @@ struct POIRefreshService: Sendable {
         var officialError: String?
     }
 
+    /// Both the official site and the Overpass fallback failed.
+    struct BothSourcesFailed: LocalizedError {
+        var kind: POIKind
+        var officialError: String
+        var overpassError: String
+
+        var errorDescription: String? {
+            "\(kind.displayName): official site failed (\(officialError)); OpenStreetMap fallback failed (\(overpassError))."
+        }
+    }
+
     func fetch(kind: POIKind) async throws -> Fetched {
         guard kind != .rest else { throw ServiceError.unavailable("Rest areas are only refreshed via the bundled snapshot") }
         var officialError: String?
@@ -34,12 +45,14 @@ struct POIRefreshService: Sendable {
         } catch {
             officialError = String(describing: error)
         }
+        let official = officialError ?? "unknown"
         guard let response = await overpass.query(OverpassQueries.nationwide(kind)) else {
-            throw ServiceError.unavailable("\(kind.displayName): official site failed (\(officialError ?? "unknown")) and every Overpass mirror was unavailable")
+            throw BothSourcesFailed(kind: kind, officialError: official, overpassError: "every mirror was unavailable")
         }
         let pois = POINormalizer.normalize(response.elements, kind: kind)
         guard pois.count >= kind.sanityMinimumCount else {
-            throw POIParseError.tooFewResults(kind: kind, parsed: pois.count, minimum: kind.sanityMinimumCount)
+            let tooFew = POIParseError.tooFewResults(kind: kind, parsed: pois.count, minimum: kind.sanityMinimumCount)
+            throw BothSourcesFailed(kind: kind, officialError: official, overpassError: tooFew.description)
         }
         return Fetched(pois: pois, source: .osm, officialError: officialError)
     }

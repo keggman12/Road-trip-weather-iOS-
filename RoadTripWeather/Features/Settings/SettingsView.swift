@@ -70,16 +70,18 @@ struct TemperatureScaleEditor: View {
             }
         }
         HStack {
-            Button("Apply") { env.settings.temperatureScale = draft.normalized(); draft = env.settings.temperatureScale }
+            Button("Apply") { env.settings.applyScale(draft); draft = env.settings.temperatureScale }
+                .buttonStyle(.borderless)
             Spacer()
-            Button("Reset") { draft = .default; env.settings.temperatureScale = .default }
+            Button("Reset") { env.settings.resetScale(); draft = env.settings.temperatureScale }
+                .buttonStyle(.borderless)
         }
         .onAppear { draft = env.settings.temperatureScale }
     }
 }
 
 struct VehicleGarageEditor: View {
-    @Environment(\.modelContext) private var context
+    @Environment(AppEnvironment.self) private var env
     @Query(sort: \VehicleRecord.sortOrder) private var vehicles: [VehicleRecord]
 
     var body: some View {
@@ -88,7 +90,7 @@ struct VehicleGarageEditor: View {
                 TextField("Name", text: Bindable(v).name)
                 TextField("mi", value: Binding(
                     get: { v.rangeMi },
-                    set: { v.rangeMi = Vehicle.clampRange($0) }
+                    set: { env.trips.setRange($0, for: v) }
                 ), format: .number)
                 .keyboardType(.numberPad)
                 .multilineTextAlignment(.trailing)
@@ -98,18 +100,10 @@ struct VehicleGarageEditor: View {
             }
         }
         .onDelete { offsets in
-            guard vehicles.count - offsets.count >= 1 else { return }   // web: keep at least one
-            for i in offsets { context.delete(vehicles[i]) }
+            env.trips.deleteVehicles(offsets.map { vehicles[$0] })
         }
-        Button {
-            context.insert(VehicleRecord(name: "New vehicle", rangeMi: 300, isEV: false, sortOrder: (vehicles.last?.sortOrder ?? -1) + 1))
-        } label: { Label("Add vehicle", systemImage: "plus") }
-        Button("Reset to defaults") {
-            for v in vehicles { context.delete(v) }
-            for (i, d) in Vehicle.defaults.enumerated() {
-                context.insert(VehicleRecord(name: d.name, rangeMi: d.rangeMi, isEV: d.isEV, sortOrder: i, isBuiltIn: true))
-            }
-        }
+        Button { env.trips.addVehicle() } label: { Label("Add vehicle", systemImage: "plus") }
+        Button("Reset to defaults") { env.trips.resetVehicles() }
     }
 }
 

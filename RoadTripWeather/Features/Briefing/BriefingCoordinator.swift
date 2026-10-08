@@ -209,19 +209,25 @@ final class BriefingCoordinator {
             }
             return out
         }
-        for (i, forecast, alerts) in results {
+        var failed: [String] = []
+        for (i, forecast, alerts) in results.sorted(by: { $0.0 < $1.0 }) {
             env.status.countCall(.weatherkit)
             if let forecast {
                 b.stops[i].weather = forecast.snapshot
                 b.stops[i].horizon = forecast.horizon
-                env.status.recordSuccess(.weatherkit, count: 1)
             } else {
                 b.stops[i].weather = nil
                 b.stops[i].horizon = .failed
-                env.status.recordError(.weatherkit, "Forecast failed for \(b.stops[i].label)")
+                failed.append(b.stops[i].label)
             }
             b.stops[i].forecastFor = b.stops[i].eta
             b.stops[i].alerts = alerts
+        }
+        if failed.count < results.count {
+            env.status.recordSuccess(.weatherkit, count: results.count - failed.count)
+        }
+        if !failed.isEmpty {
+            env.status.recordError(.weatherkit, "\(failed.count) of \(results.count) forecasts failed (\(failed.prefix(3).joined(separator: ", ")))")
         }
     }
 

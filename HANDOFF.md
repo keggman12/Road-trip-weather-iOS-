@@ -17,7 +17,7 @@ first Mac session**, which built, signed, tested and ran the app. Branch:
 | `project.yml` (XcodeGen) | generates cleanly | Xcode 27.0, team `D69L37WPA3` set |
 | App target (SwiftUI, SwiftData, MapKit, WeatherKit, NWS) | builds with zero warnings, runs | iPhone 17 simulator + signed device build |
 | Signing / capabilities | done | App ID `com.keggman12.RoadTripWeather`: WeatherKit (Capabilities + App Services), iCloud/CloudKit, Push; container `iCloud.com.keggman12.RoadTripWeather`; live WeatherKit calls succeed |
-| App tests (`RoadTripWeatherTests/`) | 31 tests, green | `xcodebuild test` (see §2) |
+| App tests (`RoadTripWeatherTests/`) | 38 tests, green | `xcodebuild test` (see §2) |
 
 ### Phase-1 tasks (`docs/phase1-tasks.md`)
 
@@ -32,7 +32,7 @@ first Mac session**, which built, signed, tested and ran the app. Branch:
 | 7 Plan screen | ◐ | range clamp 20…800 + keyboard Done added; recents verified by hand; no automated test of "Find Routes disabled until resolved" |
 | 8 Routes + briefing persistence | ✅ | `SessionPersistenceTests`: draft written before the UI sees it; restored on relaunch |
 | 9–13 Map, stops, precip, POIs, saved trips | ✅ | `BriefingAcceptanceTests` (offline fakes with an airplane-mode switch) |
-| 14 Settings + Data Sources | ⏳ | next |
+| 14 Settings + Data Sources | ✅ | `SettingsDataSourcesTests`: every row (MapKit, WeatherKit, NWS, Overpass, brands, rest, snapshot, OCM) updates after its call; bands fix-up/persist/reset; garage rules |
 | 15 `tools/poi-snapshot` | ✅ | ran on Linux; not yet re-run on the Mac |
 
 ## 2. Build and test on the Mac
@@ -42,7 +42,7 @@ xcodegen generate                                         # after any project.ym
 swift test --package-path Packages/RoadTripCore           # 85 tests
 xcodebuild -project RoadTripWeather.xcodeproj -scheme RoadTripWeather \
   -destination 'platform=iOS Simulator,name=iPhone 17' \
-  -collect-test-diagnostics never test                    # 31 app + 85 Core tests
+  -collect-test-diagnostics never test                    # 38 app + 85 Core tests
 ```
 
 - **`-collect-test-diagnostics never` matters**: without it, a failing test leaves xcodebuild
@@ -62,8 +62,10 @@ xcodebuild -project RoadTripWeather.xcodeproj -scheme RoadTripWeather \
 - The first launch after a cold simulator boot shows ~5 s of black — that is the simulator, not
   the app. Measured: the app's launch path is 275 ms on a fresh install; the bundled POI import
   (~215 ms) now runs on a background `@ModelActor` (`POISnapshotImporter`).
-- `POIStore.meta(for:)` is read-only on purpose so UI can't race the importer into duplicate
-  meta rows (no unique constraints under CloudKit).
+- Two plain `Button`s in one `Form` row both fire on any tap (Apply also ran Reset); use
+  `.buttonStyle(.borderless)` for multi-button rows.
+- `DataSourceStatusStore.status(_:)` and `POIStore.meta(for:)` are read-only on purpose so rendering can't insert rows or race the
+  importer into duplicates (no unique constraints under CloudKit).
 
 ## 4. Decisions already made with the owner (don't re-ask)
 
@@ -107,13 +109,11 @@ xcodebuild -project RoadTripWeather.xcodeproj -scheme RoadTripWeather \
 
 ## 6. What's next
 
-1. **Task 14** (Settings + Data Sources): bands editor monotonic fix-up/reset, garage, NWS
-   contact; each Data Sources row updates after its call; OCM row says "disabled — add a key".
-2. Task 7 leftovers: automated test that Find Routes stays disabled until both fields are set
+1. Task 7 leftovers: automated test that Find Routes stays disabled until both fields are set
    and that recents only update after successful geocoding.
-3. Phase 2 (optimizer UI, manual stop entry, GPX, Waze links, Supercharger lookup): the Core
+2. Phase 2 (optimizer UI, manual stop entry, GPX, Waze links, Supercharger lookup): the Core
    pieces exist (`DepartureCandidates`, `TripScorer`, `Geo.projectOntoRoute`, `StopEditReplayer`).
-4. Polish noticed in the simulator, not yet done: the Find Routes button sits under the floating
+3. Polish noticed in the simulator, not yet done: the Find Routes button sits under the floating
    tab bar until you scroll; the overnight toggle on stop cards has no visible label; wind text
    truncates on stop cards.
 
