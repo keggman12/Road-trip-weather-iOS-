@@ -1,0 +1,114 @@
+[
+  {
+    "name": "Denver → Dallas & back",
+    "coords": [
+      {
+        "lat": 39.7392,
+        "lon": -104.9903
+      },
+      {
+        "lat": 38.2544123,
+        "lon": -104.6091456
+      },
+      {
+        "lat": 35.2219971,
+        "lon": -101.8312969
+      },
+      {
+        "lat": 32.7766642,
+        "lon": -96.7969879
+      }
+    ],
+    "stops": [
+      {
+        "lat": 39.7392,
+        "lon": -104.9903,
+        "etaEpoch": 1781096400,
+        "label": "Denver, CO",
+        "weather": {
+          "temp": 71,
+          "category": "partly-cloudy",
+          "desc": "partly cloudy",
+          "windSpeed": 12,
+          "pop": null
+        },
+        "overnight": false
+      },
+      {
+        "lat": 38.2544123,
+        "lon": -104.6091456,
+        "etaEpoch": 1781106000,
+        "label": "Pueblo <I-25 & US-50>",
+        "weather": {
+          "temp": 84,
+          "category": "thunderstorm",
+          "desc": "thunderstorm",
+          "windSpeed": 20,
+          "pop": 0.645
+        },
+        "overnight": false
+      },
+      {
+        "lat": 35.2219971,
+        "lon": -101.8312969,
+        "etaEpoch": 1781125200,
+        "label": "Amarillo \"Big Texan\" 'stop'",
+        "weather": {
+          "temp": 66,
+          "category": "clear",
+          "desc": "clear",
+          "windSpeed": 5,
+          "pop": 0
+        },
+        "overnight": true
+      },
+      {
+        "lat": 32.7766642,
+        "lon": -96.7969879,
+        "etaEpoch": 1781190000,
+        "label": "Dallas, TX",
+        "weather": null,
+        "overnight": false
+      }
+    ],
+    "gpx": "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n<gpx version=\"1.1\" creator=\"Road Trip Weather Map\" xmlns=\"http://www.topografix.com/GPX/1/1\">\n  <metadata><name>Denver → Dallas &amp; back</name><time>NOW</time></metadata>\n  <wpt lat=\"39.739200\" lon=\"-104.990300\">\n    <time>2026-06-10T13:00:00.000Z</time>\n    <name>Origin — Denver, CO</name>\n    <desc>71°F Partly cloudy · wind 12 mph</desc>\n  </wpt>\n  <wpt lat=\"38.254412\" lon=\"-104.609146\">\n    <time>2026-06-10T15:40:00.000Z</time>\n    <name>Stop 1 — Pueblo &lt;I-25 &amp; US-50&gt;</name>\n    <desc>84°F Thunderstorm · wind 20 mph · precip 65%</desc>\n  </wpt>\n  <wpt lat=\"35.221997\" lon=\"-101.831297\">\n    <time>2026-06-10T21:00:00.000Z</time>\n    <name>Stop 2 — Amarillo &quot;Big Texan&quot; &#39;stop&#39;</name>\n    <desc>66°F Clear · wind 5 mph · precip 0% · OVERNIGHT STOP</desc>\n  </wpt>\n  <wpt lat=\"32.776664\" lon=\"-96.796988\">\n    <time>2026-06-11T15:00:00.000Z</time>\n    <name>Destination — Dallas, TX</name>\n  </wpt>\n  <trk><name>Denver → Dallas &amp; back</name><trkseg>\n    <trkpt lat=\"39.739200\" lon=\"-104.990300\"/>\n    <trkpt lat=\"38.254412\" lon=\"-104.609146\"/>\n    <trkpt lat=\"35.221997\" lon=\"-101.831297\"/>\n    <trkpt lat=\"32.776664\" lon=\"-96.796988\"/>\n  </trkseg></trk>\n</gpx>"
+  },
+  {
+    "name": "Two stops",
+    "coords": [
+      {
+        "lat": 39.7392,
+        "lon": -104.9903
+      },
+      {
+        "lat": 38.2544123,
+        "lon": -104.6091456
+      }
+    ],
+    "stops": [
+      {
+        "lat": 39.7392,
+        "lon": -104.9903,
+        "etaEpoch": 1781096400,
+        "label": "Denver, CO",
+        "weather": {
+          "temp": 71,
+          "category": "partly-cloudy",
+          "desc": "partly cloudy",
+          "windSpeed": 12,
+          "pop": null
+        },
+        "overnight": false
+      },
+      {
+        "lat": 32.7766642,
+        "lon": -96.7969879,
+        "etaEpoch": 1781190000,
+        "label": "Dallas, TX",
+        "weather": null,
+        "overnight": true
+      }
+    ],
+    "gpx": "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n<gpx version=\"1.1\" creator=\"Road Trip Weather Map\" xmlns=\"http://www.topografix.com/GPX/1/1\">\n  <metadata><name>Two stops</name><time>NOW</time></metadata>\n  <wpt lat=\"39.739200\" lon=\"-104.990300\">\n    <time>2026-06-10T13:00:00.000Z</time>\n    <name>Origin — Denver, CO</name>\n    <desc>71°F Partly cloudy · wind 12 mph</desc>\n  </wpt>\n  <wpt lat=\"32.776664\" lon=\"-96.796988\">\n    <time>2026-06-11T15:00:00.000Z</time>\n    <name>Destination — Dallas, TX</name>\n    <desc>OVERNIGHT STOP</desc>\n  </wpt>\n  <trk><name>Two stops</name><trkseg>\n    <trkpt lat=\"39.739200\" lon=\"-104.990300\"/>\n    <trkpt lat=\"38.254412\" lon=\"-104.609146\"/>\n  </trkseg></trk>\n</gpx>"
+  }
+]

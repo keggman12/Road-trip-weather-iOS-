@@ -27,6 +27,11 @@ struct BriefingView: View {
                 Menu {
                     Button { tripName = coordinator.plan.defaultName; showSave = true } label: { Label("Save trip", systemImage: "bookmark") }
                     Button { Task { await coordinator.refreshForecasts() } } label: { Label("Refresh forecasts", systemImage: "arrow.clockwise") }
+                    if let export = coordinator.gpxExport {
+                        ShareLink(item: export, preview: SharePreview(export.fileName)) {
+                            Label("Export GPX", systemImage: "square.and.arrow.up")
+                        }
+                    }
                     Section("POI layers") {
                         ForEach(POIKind.allCases) { kind in
                             Toggle(kind.displayName.prefix(1).uppercased() + kind.displayName.dropFirst(), isOn: Binding(

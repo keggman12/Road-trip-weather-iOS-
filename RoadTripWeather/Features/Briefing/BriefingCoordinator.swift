@@ -41,6 +41,12 @@ final class BriefingCoordinator {
     }
 
     var isBusy: Bool { phase != .idle }
+
+    /// The on-screen briefing as a GPX file, named after the saved trip or
+    /// "Origin → Destination". Works offline from a cached briefing.
+    var gpxExport: GPXExport? {
+        briefing.map { GPXExport(tripName: loadedTrip?.name ?? plan.defaultName, briefing: $0) }
+    }
     var selectedRoute: RouteGeometry? { routes.indices.contains(selectedRouteIndex) ? routes[selectedRouteIndex] : nil }
     var briefing: Briefing? { briefings[selectedRouteIndex] }
 

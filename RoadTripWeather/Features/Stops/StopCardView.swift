@@ -32,6 +32,7 @@ struct StopCardView: View {
                 } else {
                     Text(stop.horizon == .beyondHorizon ? "—" : "ERR").font(.caption.weight(.bold)).foregroundStyle(Theme.danger)
                 }
+                if NavigationLinks.isNavigable(stopIndex: index) { NavigateMenu(stop: stop) }
             }
 
             HStack(spacing: 6) {
