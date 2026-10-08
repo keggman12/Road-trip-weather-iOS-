@@ -83,7 +83,7 @@ final class AppEnvironment {
         )
         status.value = env.status
         env.trips.seedVehiclesIfNeeded()
-        env.pois.importBundledSnapshotIfNeeded()
+        env.pois.startBundledSnapshotImport()
         return env
     }
 

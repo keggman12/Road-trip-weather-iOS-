@@ -32,9 +32,13 @@ struct DataSourcesView: View {
                     }
                     if let kind = poiKind(source), kind != .rest {
                         HStack {
-                            let meta = env.pois.meta(for: kind)
-                            Text("Source: \(meta.sourceRaw)\(meta.snapshotVersion.isEmpty ? "" : " · snapshot \(meta.snapshotVersion.prefix(10))")")
-                                .font(.caption2).foregroundStyle(Theme.muted)
+                            if let meta = env.pois.meta(for: kind) {
+                                Text("Source: \(meta.sourceRaw)\(meta.snapshotVersion.isEmpty ? "" : " · snapshot \(meta.snapshotVersion.prefix(10))")")
+                                    .font(.caption2).foregroundStyle(Theme.muted)
+                            } else {
+                                Text("Loading bundled snapshot…")
+                                    .font(.caption2).foregroundStyle(Theme.muted)
+                            }
                             Spacer()
                             Button(refreshing == kind ? "Refreshing…" : "Refresh now") {
                                 Task { await refresh(kind) }

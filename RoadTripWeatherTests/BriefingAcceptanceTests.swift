@@ -120,7 +120,7 @@ struct BriefingAcceptanceTests {
     @Test func poiLayerWorksOfflineAndAddedStopIsSnappedWithDefaultDwell() async throws {
         // Route the fake road through a real Buc-ee's from the bundled snapshot.
         let probe = try makeEnv()
-        probe.pois.importBundledSnapshotIfNeeded()
+        await probe.pois.importBundledSnapshotIfNeeded()
         let store = try await probe.pois.pois(kind: .bucees)
         try #require(store.count >= 30, "bundled snapshot has \(store.count) Buc-ee's")
         let bucees = try #require(store.first { $0.name.contains("TX") } ?? store.first)
@@ -158,7 +158,7 @@ struct BriefingAcceptanceTests {
 
     @Test func savedTripOpensOfflineWithEverything() async throws {
         let env = try makeEnv()
-        env.pois.importBundledSnapshotIfNeeded()
+        await env.pois.importBundledSnapshotIfNeeded()
         let c = try await briefed(env)
         let generated = Date().addingTimeInterval(-3 * 3600)
         c.briefings[c.selectedRouteIndex]?.generatedAt = generated
