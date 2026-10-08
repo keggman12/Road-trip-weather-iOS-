@@ -42,10 +42,13 @@ struct NWSAlertService: AlertService {
     let session: URLSession
     let limiter = AsyncLimiter(limit: 4)
     let statusSink: (@Sendable (Result<Int, Error>) -> Void)?
+    /// First retry delay; doubles per attempt. Tests pass zero.
+    let retryDelay: Duration
 
-    init(contactEmail: String?, appVersion: String, session: URLSession = .shared, statusSink: (@Sendable (Result<Int, Error>) -> Void)? = nil) {
+    init(contactEmail: String?, appVersion: String, session: URLSession = .shared, retryDelay: Duration = .milliseconds(1500), statusSink: (@Sendable (Result<Int, Error>) -> Void)? = nil) {
         self.userAgent = ClientIdentity.nwsUserAgent(version: appVersion, contact: contactEmail)
         self.session = session
+        self.retryDelay = retryDelay
         self.statusSink = statusSink
     }
 
@@ -73,22 +76,31 @@ struct NWSAlertService: AlertService {
         }
     }
 
+    /// Retries 429, 5xx and transient network failures with exponential
+    /// backoff; any other status or error fails immediately.
     private func fetchWithRetry(_ request: URLRequest, attempts: Int = 3) async throws -> Data {
         var lastError: Error = ServiceError.unavailable("NWS")
         for attempt in 0..<attempts {
+            if attempt > 0 {
+                try await Task.sleep(for: retryDelay * (1 << (attempt - 1)))
+            }
+            let data: Data
+            let response: URLResponse
             do {
-                let (data, response) = try await session.data(for: request)
-                let code = (response as? HTTPURLResponse)?.statusCode ?? 0
-                if (200..<300).contains(code) { return data }
-                lastError = ServiceError.http(code)
-                guard code == 429 || code >= 500 else { throw lastError }
-            } catch {
+                (data, response) = try await session.data(for: request)
+            } catch let error as URLError where Self.isTransient(error) {
                 lastError = error
+                continue
             }
-            if attempt < attempts - 1 {
-                try await Task.sleep(for: .seconds(Double(1 << attempt) * 1.5))
-            }
+            let code = (response as? HTTPURLResponse)?.statusCode ?? 0
+            if (200..<300).contains(code) { return data }
+            lastError = ServiceError.http(code)
+            guard code == 429 || code >= 500 else { throw lastError }
         }
         throw lastError
+    }
+
+    private static func isTransient(_ error: URLError) -> Bool {
+        [.timedOut, .networkConnectionLost, .cannotConnectToHost].contains(error.code)
     }
 }
