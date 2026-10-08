@@ -47,7 +47,7 @@ struct MapKitRoutingService: RoutingService {
     func routes(through points: [PlacePoint], departure: Date) async throws -> RoutingResult {
         guard points.count >= 2, let first = points.first, let last = points.last else { throw ServiceError.noRoute }
         if points.count == 2 {
-            let routes = try await directions(from: first, to: last, departure: departure, alternates: true)
+            let routes = RouteComparison.dedupe(try await directions(from: first, to: last, departure: departure, alternates: true))
             guard !routes.isEmpty else { throw ServiceError.noRoute }
             let note = routes.count == 1 ? "MapKit returned a single route for this trip. Add a via-point to shape it." : nil
             return RoutingResult(routes: routes, note: note)
@@ -63,13 +63,15 @@ struct MapKitRoutingService: RoutingService {
         }
         let viaLabel = "via " + points.dropFirst().dropLast().map(\.shortLabel).joined(separator: " · ")
         var routes = [RouteGeometry.chained(legs, label: viaLabel)]
-        // Direct route for comparison — best-effort, like the web.
-        if let direct = try? await directions(from: first, to: last, departure: departure, alternates: false).first {
-            var d = direct
-            d.label = "Direct"
+        // Direct routes with alternates for comparison (best-effort). The
+        // best direct route often follows the via route anyway; dedupe drops
+        // it so a genuinely different road (e.g. east through Kansas) shows.
+        let direct = (try? await directions(from: first, to: last, departure: departure, alternates: true)) ?? []
+        for (i, var d) in direct.enumerated() {
+            d.label = i == 0 ? "Direct" : nil
             routes.append(d)
         }
-        return RoutingResult(routes: routes, note: nil)
+        return RoutingResult(routes: RouteComparison.dedupe(routes), note: nil)
     }
 
     private func directions(from a: PlacePoint, to b: PlacePoint, departure: Date, alternates: Bool) async throws -> [RouteGeometry] {

@@ -56,13 +56,44 @@ struct LiveRoutingTests {
         await c.findRoutes()
 
         #expect(c.errorMessage == nil)
-        #expect(c.routes.map(\.label) == ["via Amarillo", "Direct"])
+        #expect(c.routes.first?.label == "via Amarillo")
+        #expect(c.routes.count >= 1 && c.routes.count <= RouteComparison.maxRoutes)
+        assertNoDuplicates(c.routes)
         let via = try #require(c.routes.first)
         // The via route must actually pass through Amarillo.
         let amarillo = Coordinate(lat: 35.222, lon: -101.8313)
         let closest = via.coordinates.map { Geo.haversineMiles($0, amarillo) }.min() ?? .infinity
         #expect(closest < 5, "via route passes \(closest) mi from Amarillo")
         #expect(await weather.calls == 0)
+    }
+
+    /// Owner report: via Raton showed two copies of the same road and never
+    /// the eastern route through Kansas / the Oklahoma panhandle.
+    @Test func viaRatonAlsoOffersTheEasternRoute() async throws {
+        let c = try makeCoordinator()
+        c.plan.originText = "Thornton, CO"
+        c.plan.viaTexts = ["Raton, NM"]
+        c.plan.destinationText = "Dallas, TX"
+        await c.findRoutes()
+        #expect(c.errorMessage == nil)
+        #expect(c.routes.first?.label == "via Raton")
+        #expect(c.routes.count >= 2, "\(c.routes.map { "\($0.label ?? "-") \(Int($0.distanceMi)) mi" })")
+        assertNoDuplicates(c.routes)
+        // Something east of the I-25 / US-87 corridor (west edge of Kansas is −102.05°).
+        let eastern = c.routes.dropFirst().contains { r in r.coordinates.contains { $0.lat > 36.5 && $0.lat < 38.5 && $0.lon > -102.6 } }
+        #expect(eastern, "\(c.routes.map { $0.label ?? "-" })")
+        for r in c.routes.dropFirst() { #expect(r.label?.contains("via ") == true, "alternatives are named: \(r.label ?? "nil")") }
+        print("ROUTES", c.routes.map { "\($0.label ?? "-") \(Int($0.distanceMi)) mi \(Int($0.durationSec / 60)) min" })
+    }
+
+    private func assertNoDuplicates(_ routes: [RouteGeometry]) {
+        for i in routes.indices {
+            for j in routes.indices where j > i {
+                let same = RouteComparison.overlap(routes[i].coordinates, with: routes[j].coordinates) >= RouteComparison.duplicateOverlap
+                    && RouteComparison.overlap(routes[j].coordinates, with: routes[i].coordinates) >= RouteComparison.duplicateOverlap
+                #expect(!same, "routes \(i) and \(j) are the same road")
+            }
+        }
     }
 
     @Test func everyBriefedStopHasATimeZone() async throws {

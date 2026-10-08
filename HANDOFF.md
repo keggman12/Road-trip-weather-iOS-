@@ -93,6 +93,9 @@ xcodebuild -project RoadTripWeather.xcodeproj -scheme RoadTripWeather \
   range, counting the off-route detour; a rest area (flagged "no fuel") only when no fuel is in
   reach; else a plain waypoint at the 90 % point with a warning. Plain waypoints and generic
   rest areas are named by reverse geocoding ("I-25 S near Rye, CO"); Apple has no mile markers.
+- Route list: via trips also request the direct route **with alternates**; near-duplicates
+  (≥ 90 % mutual overlap within 3 mi, `RouteComparison`) are dropped, max 4 routes, and each
+  alternative is named after a place only it passes ("via Lamar, CO").
 - Geocoded places whose name differs from what was typed are flagged (e.g. "Rotan, New Mexico"
   → Raton, NM). A new search detaches from the loaded saved trip; default names include vias.
 

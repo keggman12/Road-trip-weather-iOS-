@@ -102,7 +102,7 @@ final class BriefingCoordinator {
             phase = .routing
             env.status.countCall(.mapkit)
             let result = try await env.routing.routes(through: points, departure: plan.departure)
-            routes = result.routes
+            routes = await labelledByDistinctivePlace(result.routes)
             routeNote = ([result.note].compactMap { $0 } + placeNotices.map { "⚠ " + $0 }).joined(separator: "\n").nilIfEmpty
             env.status.recordSuccess(.mapkit, count: routes.count)
             selectedRouteIndex = routes.isEmpty ? -1 : 0
@@ -119,6 +119,23 @@ final class BriefingCoordinator {
         selectedRouteIndex = index
         if !briefings.isEmpty { persistSession() }
         Task { await refreshPOILayers() }
+    }
+
+    /// Names each alternative after a place only it passes ("via Lamar, CO")
+    /// so similar-looking routes can be told apart. One reverse geocode per
+    /// route; the user's "via …" labels are kept.
+    func labelledByDistinctivePlace(_ routes: [RouteGeometry]) async -> [RouteGeometry] {
+        guard routes.count > 1 else { return routes }
+        var out = routes
+        for i in routes.indices where !(routes[i].label?.hasPrefix("via ") ?? false) {
+            let others = routes.indices.filter { $0 != i }.map { routes[$0].coordinates }
+            guard let p = RouteComparison.distinctivePoint(of: routes[i].coordinates, others: others),
+                  let info = await env.timeZones.place(at: p)
+            else { continue }
+            let place = [info.town ?? info.county, info.state].compactMap { $0 }.joined(separator: ", ")
+            out[i].label = RouteComparison.label(existing: routes[i].label, distinctivePlace: place)
+        }
+        return out
     }
 
     /// True when `texts` (origin, vias…, destination) are the saved trip's queries.
