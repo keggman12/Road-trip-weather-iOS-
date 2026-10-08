@@ -61,10 +61,10 @@ struct StopCardView: View {
 
             if isInterior {
                 HStack(spacing: 14) {
-                    Stepper(value: Binding(get: { stop.dwellMinutes }, set: onDwell), in: 0...600, step: 5) {
+                    Stepper(value: Binding(get: { stop.dwellMinutes }, set: { onDwell($0) }), in: 0...600, step: 5) {
                         Text("Dwell \(stop.dwellMinutes) min").font(.caption.monospacedDigit())
                     }
-                    Toggle(isOn: Binding(get: { stop.manualOvernight }, set: onOvernight)) {
+                    Toggle(isOn: Binding(get: { stop.manualOvernight }, set: { onOvernight($0) })) {
                         Text(stop.autoOvernight ? "Overnight (auto)" : "Overnight").font(.caption)
                     }
                     .disabled(stop.autoOvernight)

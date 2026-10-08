@@ -75,6 +75,7 @@ targets:
     settings:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: com.keggman12.RoadTripWeatherTests
+        GENERATE_INFOPLIST_FILE: YES
 
 schemes:
   RoadTripWeather:

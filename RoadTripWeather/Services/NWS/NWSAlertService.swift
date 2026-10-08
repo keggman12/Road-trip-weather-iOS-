@@ -59,9 +59,10 @@ struct NWSAlertService: AlertService {
         request.setValue(userAgent, forHTTPHeaderField: "User-Agent")
         request.setValue("application/geo+json", forHTTPHeaderField: "Accept")
         request.timeoutInterval = 20
+        let finalRequest = request
 
         do {
-            let data = try await limiter.withPermit { try await fetchWithRetry(request) }
+            let data = try await limiter.withPermit { try await fetchWithRetry(finalRequest) }
             let all = try NWSAlertsResponse.decode(data).alerts()
             let matched = AlertMatcher.inEffect(all, at: eta)
             statusSink?(.success(matched.count))
