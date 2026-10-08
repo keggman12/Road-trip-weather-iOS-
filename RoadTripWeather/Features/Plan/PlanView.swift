@@ -74,10 +74,13 @@ struct PlanView: View {
                 }
             }
 
-            if coordinator.errorMessage != nil || !coordinator.routes.isEmpty {
+            if coordinator.errorMessage != nil || !coordinator.routes.isEmpty || !coordinator.placeNotices.isEmpty {
                 Section {
                     if let e = coordinator.errorMessage {
                         Text(e).foregroundStyle(Theme.danger).font(.footnote)
+                    }
+                    ForEach(coordinator.placeNotices, id: \.self) { n in
+                        Label(n, systemImage: "exclamationmark.triangle").foregroundStyle(Theme.warn).font(.footnote)
                     }
                     if !coordinator.routes.isEmpty {
                         Button("Show routes") { showRoutes = true }

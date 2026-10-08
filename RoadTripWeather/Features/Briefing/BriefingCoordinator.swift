@@ -33,6 +33,8 @@ final class BriefingCoordinator {
     /// POIs per kind within the selected route's corridor.
     var corridorPOIs: [POIKind: [POI]] = [:]
     var weatherAttributionURL: URL?
+    /// Places that resolved to a different name than was typed.
+    var placeNotices: [String] = []
     /// The saved trip the current plan came from, if any.
     var loadedTrip: TripRecord?
     /// Best-time-to-leave results (P2-4); never touches `briefings`.
@@ -82,6 +84,12 @@ final class BriefingCoordinator {
                 points.append(try await env.geocoding.geocode(t))
             }
             guard let first = points.first, let last = points.last else { throw ServiceError.noRoute }
+            // A new search detaches from the saved trip it came from, so Save
+            // creates a new trip instead of overwriting the old one.
+            if let trip = loadedTrip, !Self.matches(trip, texts: texts) { loadedTrip = nil }
+            placeNotices = zip(texts, points).compactMap { query, place in
+                PlaceMatch.isLikelyMismatch(query: query, label: place.label) ? PlaceMatch.notice(query: query, label: place.label) : nil
+            }
             plan.origin = first
             plan.destination = last
             plan.vias = Array(points.dropFirst().dropLast())
@@ -93,7 +101,7 @@ final class BriefingCoordinator {
             env.status.countCall(.mapkit)
             let result = try await env.routing.routes(through: points, departure: plan.departure)
             routes = result.routes
-            routeNote = result.note
+            routeNote = ([result.note].compactMap { $0 } + placeNotices.map { "⚠ " + $0 }).joined(separator: "\n").nilIfEmpty
             env.status.recordSuccess(.mapkit, count: routes.count)
             selectedRouteIndex = routes.isEmpty ? -1 : 0
             statusMessage = "\(routes.count) route\(routes.count == 1 ? "" : "s") found — choose one, set range, then generate the briefing."
@@ -111,9 +119,17 @@ final class BriefingCoordinator {
         Task { await refreshPOILayers() }
     }
 
+    /// True when `texts` (origin, vias…, destination) are the saved trip's queries.
+    static func matches(_ trip: TripRecord, texts: [String]) -> Bool {
+        let saved = [trip.originQuery] + (JSONCoding.decode([PlacePoint].self, from: trip.viasData) ?? []).map(\.query) + [trip.destQuery]
+        let norm = { (s: [String]) in s.map { $0.trimmingCharacters(in: .whitespaces).lowercased() } }
+        return norm(saved) == norm(texts)
+    }
+
     private func resetRoutes() {
         routes = []
         routeNote = nil
+        placeNotices = []
         selectedRouteIndex = -1
         briefings = [:]
         corridorPOIs = [:]
@@ -442,8 +458,12 @@ final class BriefingCoordinator {
 
     // MARK: Saved trips
 
-    func save(name: String) throws {
-        loadedTrip = try env.trips.save(plan: plan, name: name, selectedRouteIndex: max(0, selectedRouteIndex), briefing: briefing, existing: loadedTrip)
+    /// Name the Save dialog suggests: the linked trip's, else the plan's.
+    var suggestedTripName: String { loadedTrip?.name ?? plan.defaultName }
+
+    /// Saves into the linked trip, or a new one when `asNew` or not linked.
+    func save(name: String, asNew: Bool = false) throws {
+        loadedTrip = try env.trips.save(plan: plan, name: name, selectedRouteIndex: max(0, selectedRouteIndex), briefing: briefing, existing: asNew ? nil : loadedTrip)
         persistSession()
         statusMessage = "Trip “\(name)” saved."
     }

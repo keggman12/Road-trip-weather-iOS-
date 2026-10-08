@@ -41,6 +41,6 @@ struct TripPlan: Hashable, Codable, Sendable {
     var defaultName: String {
         let o = origin?.shortLabel ?? originText.split(separator: ",").first.map(String.init) ?? "Origin"
         let d = destination?.shortLabel ?? destinationText.split(separator: ",").first.map(String.init) ?? "Destination"
-        return "\(o) → \(d)"
+        return TripNaming.defaultName(origin: o, vias: vias.map(\.shortLabel), destination: d)
     }
 }

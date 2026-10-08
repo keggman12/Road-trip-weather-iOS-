@@ -117,3 +117,7 @@ extension ConditionCategory {
 
     var badgeColor: Color { Color(hex: badgeColorHex) }
 }
+
+extension String {
+    var nilIfEmpty: String? { isEmpty ? nil : self }
+}

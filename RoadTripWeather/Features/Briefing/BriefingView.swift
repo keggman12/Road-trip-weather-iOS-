@@ -27,7 +27,7 @@ struct BriefingView: View {
         .toolbar {
             ToolbarItem(placement: .topBarTrailing) {
                 Menu {
-                    Button { tripName = coordinator.plan.defaultName; showSave = true } label: { Label("Save trip", systemImage: "bookmark") }
+                    Button { tripName = coordinator.suggestedTripName; showSave = true } label: { Label("Save trip", systemImage: "bookmark") }
                     Button { Task { await coordinator.refreshForecasts() } } label: { Label("Refresh forecasts", systemImage: "arrow.clockwise") }
                     Button { showOptimizer = true } label: { Label("Best time to leave…", systemImage: "clock.arrow.2.circlepath") }
                         .disabled(coordinator.optimizableRouteIndices.isEmpty)
@@ -49,7 +49,10 @@ struct BriefingView: View {
         }
         .alert("Trip name", isPresented: $showSave) {
             TextField("Name", text: $tripName)
-            Button("Save") { try? coordinator.save(name: tripName) }
+            Button(coordinator.loadedTrip == nil ? "Save" : "Update") { try? coordinator.save(name: tripName) }
+            if coordinator.loadedTrip != nil {
+                Button("Save as new trip") { try? coordinator.save(name: tripName == coordinator.loadedTrip?.name ? coordinator.plan.defaultName : tripName, asNew: true) }
+            }
             Button("Cancel", role: .cancel) {}
         }
         .sheet(isPresented: $showOptimizer) {
