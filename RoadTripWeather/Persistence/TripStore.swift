@@ -84,6 +84,35 @@ final class TripStore {
         (trip.briefings ?? []).sorted { $0.routeIndex < $1.routeIndex }.map(BriefingMapper.briefing(from:))
     }
 
+    // MARK: Current session (unsaved briefings)
+
+    /// Cached briefings with no trip: the current session's briefings,
+    /// written as soon as they are generated so they survive a relaunch
+    /// even if the user never taps Save.
+    func draftBriefings() -> [Briefing] {
+        draftRecords().sorted { $0.routeIndex < $1.routeIndex }.map(BriefingMapper.briefing(from:))
+    }
+
+    /// Makes the drafts exactly `briefings` (one record per route index).
+    func replaceDrafts(with briefings: [Briefing]) throws {
+        let existing = draftRecords()
+        let keep = Set(briefings.map(\.routeIndex))
+        for r in existing where !keep.contains(r.routeIndex) { context.delete(r) }
+        for b in briefings {
+            let record = existing.first { $0.routeIndex == b.routeIndex } ?? {
+                let r = CachedBriefingRecord()
+                context.insert(r)
+                return r
+            }()
+            BriefingMapper.store(b, into: record, context: context)
+        }
+        try context.save()
+    }
+
+    private func draftRecords() -> [CachedBriefingRecord] {
+        ((try? context.fetch(FetchDescriptor<CachedBriefingRecord>())) ?? []).filter { $0.trip == nil }
+    }
+
     // MARK: Vehicles
 
     func vehicles() -> [VehicleRecord] {

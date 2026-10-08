@@ -26,7 +26,12 @@ struct RoutesView: View {
                 if let note = coordinator.routeNote {
                     Text("ℹ \(note)").font(.footnote).foregroundStyle(Theme.muted)
                 }
-                ForEach(Array(coordinator.routes.enumerated()), id: \.offset) { i, route in
+                if realRoutes.count < coordinator.routes.count {
+                    Text("ℹ Showing cached routes only. Find Routes again for every alternative.").font(.footnote).foregroundStyle(Theme.muted)
+                }
+                // Cached briefings pad un-briefed indices with empty
+                // placeholders; those aren't routes the user can pick.
+                ForEach(realRoutes, id: \.offset) { i, route in
                     RouteRow(index: i, route: route, fastest: fastestDuration, selected: i == coordinator.selectedRouteIndex, score: coordinator.briefings[i].map { TripScorer.score($0.stops).score })
                         .contentShape(Rectangle())
                         .onTapGesture { coordinator.selectRoute(i) }
@@ -44,7 +49,7 @@ struct RoutesView: View {
                         }.frame(maxWidth: .infinity)
                     }
                     .disabled(coordinator.isBusy || coordinator.selectedRouteIndex < 0)
-                    if coordinator.routes.count > 1 {
+                    if realRoutes.count > 1 {
                         Button("Brief all routes (compare weather)") {
                             Task {
                                 await coordinator.generateBriefing(allRoutes: true)
@@ -69,8 +74,12 @@ struct RoutesView: View {
         }
     }
 
+    private var realRoutes: [(offset: Int, element: RouteGeometry)] {
+        coordinator.routes.enumerated().filter { $0.element.coordinates.count >= 2 }
+    }
+
     private var fastestDuration: Double {
-        coordinator.routes.map(\.durationSec).min() ?? 0
+        realRoutes.map(\.element.durationSec).min() ?? 0
     }
 
     private var buttonTitle: String {

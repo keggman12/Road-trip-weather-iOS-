@@ -15,6 +15,14 @@ final class AppSettings {
     static let nwsContactKey = "rtwx-nws-contact"
     static let cloudSyncKey = "rtwx-icloud-sync"
     static let autoRefreshKey = "rtwx-poi-auto-refresh"
+    static let sessionKey = "rtwx-session-v1"
+
+    /// The plan behind the cached draft briefings, restored on launch.
+    struct Session: Codable, Sendable {
+        var plan: TripPlan
+        var selectedRouteIndex: Int
+        var tripID: UUID?
+    }
 
     var temperatureScale: TemperatureScale {
         didSet { defaults.set(JSONCoding.encode(temperatureScale), forKey: AppSettings.scaleKey) }
@@ -56,6 +64,11 @@ final class AppSettings {
         self.cloudSyncEnabled = defaults.bool(forKey: AppSettings.cloudSyncKey)
         self.poiAutoRefreshEnabled = defaults.object(forKey: AppSettings.autoRefreshKey) as? Bool ?? true
         self.openChargeMapKey = keychain.read(KeychainStore.openChargeMapAccount) ?? ""
+    }
+
+    var session: Session? {
+        get { JSONCoding.decode(Session.self, from: defaults.data(forKey: AppSettings.sessionKey)) }
+        set { defaults.set(newValue.map { JSONCoding.encode($0) }, forKey: AppSettings.sessionKey) }
     }
 
     func remember(_ texts: String...) {

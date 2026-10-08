@@ -37,6 +37,7 @@ final class BriefingCoordinator {
 
     init(env: AppEnvironment) {
         self.env = env
+        restoreSession()
     }
 
     var isBusy: Bool { phase != .idle }
@@ -88,6 +89,7 @@ final class BriefingCoordinator {
     func selectRoute(_ index: Int) {
         guard routes.indices.contains(index) else { return }
         selectedRouteIndex = index
+        if !briefings.isEmpty { persistSession() }
         Task { await refreshPOILayers() }
     }
 
@@ -111,19 +113,24 @@ final class BriefingCoordinator {
         }
         errorMessage = nil
         let indices = (allRoutes ? Array(routes.indices) : [selectedRouteIndex]).filter { routes[$0].coordinates.count >= 2 }
+        // Built off-screen: nothing reaches `briefings` (and the UI) until
+        // it is complete and persisted.
+        var fresh: [Int: Briefing] = [:]
         for j in indices {
-            await brief(routeIndex: j, label: routes[j].label ?? "Route \(j + 1)")
+            if let b = await brief(routeIndex: j, label: routes[j].label ?? "Route \(j + 1)") { fresh[j] = b }
         }
-        if let edits = plan.stopEdits.isEmpty ? nil : plan.stopEdits, var b = briefings[selectedRouteIndex] {
+        if let edits = plan.stopEdits.isEmpty ? nil : plan.stopEdits, var b = fresh[selectedRouteIndex] {
             await replayEdits(edits, into: &b)
-            briefings[selectedRouteIndex] = b
+            fresh[selectedRouteIndex] = b
             plan.stopEdits = StopEdits()
         }
         if weatherAttributionURL == nil { weatherAttributionURL = await env.weather.attributionURL() }
         // Persisted with the briefing so a cached trip can show it offline.
         if let url = weatherAttributionURL?.absoluteString {
-            for j in indices { briefings[j]?.weatherAttributionURL = url }
+            for j in fresh.keys { fresh[j]?.weatherAttributionURL = url }
         }
+        persistSession(briefings.merging(fresh) { $1 })
+        briefings.merge(fresh) { $1 }
         await refreshPOILayers()
         phase = .idle
         if let b = briefing {
@@ -135,7 +142,7 @@ final class BriefingCoordinator {
         }
     }
 
-    private func brief(routeIndex j: Int, label: String) async {
+    private func brief(routeIndex j: Int, label: String) async -> Briefing? {
         let route = routes[j]
         let (stops0, totalMi) = StopListBuilder.initialStops(
             route: route,
@@ -155,7 +162,7 @@ final class BriefingCoordinator {
             stops: stops0,
             generatedAt: Date()
         )
-        guard !b.stops.isEmpty else { return }
+        guard !b.stops.isEmpty else { return nil }
         b.stops[0].timeZoneID = plan.origin?.timeZoneID
         if b.stops.count > 1 { b.stops[b.stops.count - 1].timeZoneID = plan.destination?.timeZoneID }
         ETACalculator.recompute(&b, fallbackTimeZone: plan.departureTimeZone)
@@ -166,7 +173,7 @@ final class BriefingCoordinator {
         ETACalculator.recompute(&b, fallbackTimeZone: plan.departureTimeZone)
         await fetchWeather(for: &b, indices: Array(b.stops.indices), routeLabel: label)
         b.generatedAt = Date()
-        briefings[j] = b
+        return b
     }
 
     private func resolveTimeZones(_ b: inout Briefing) async {
@@ -243,6 +250,7 @@ final class BriefingCoordinator {
         change(&b)
         ETACalculator.recompute(&b, fallbackTimeZone: plan.departureTimeZone)
         briefings[selectedRouteIndex] = b
+        persistSession()
     }
 
     /// Web `refreshForecasts`: refetch weather + alerts at the current ETAs.
@@ -252,6 +260,7 @@ final class BriefingCoordinator {
         await fetchWeather(for: &b, indices: Array(b.stops.indices), routeLabel: b.routeLabel ?? "")
         b.generatedAt = Date()
         briefings[selectedRouteIndex] = b
+        persistSession()
         phase = .idle
         statusMessage = "Forecasts refreshed for current ETAs."
     }
@@ -273,6 +282,7 @@ final class BriefingCoordinator {
         phase = .refreshing(done: 0, total: 1)
         await fetchWeather(for: &b, indices: [i], routeLabel: b.routeLabel ?? "")
         briefings[selectedRouteIndex] = b
+        persistSession()
         phase = .idle
         let off = stop.offRouteMi ?? 0
         statusMessage = "Added “\(edit.label)” (\(off < 1 ? "snapped to route" : "~\(Int(off.rounded())) mi off route"))."
@@ -325,6 +335,7 @@ final class BriefingCoordinator {
 
     func save(name: String) throws {
         loadedTrip = try env.trips.save(plan: plan, name: name, selectedRouteIndex: max(0, selectedRouteIndex), briefing: briefing, existing: loadedTrip)
+        persistSession()
         statusMessage = "Trip “\(name)” saved."
     }
 
@@ -338,6 +349,15 @@ final class BriefingCoordinator {
         plan.destinationText = plan.destination?.query ?? ""
         plan.viaTexts = plan.vias.map(\.query)
         let cached = env.trips.cachedBriefings(for: trip)
+        show(cached, selecting: trip.selectedRouteIndex)
+        statusMessage = cached.isEmpty ? "Trip loaded — find routes to continue." : "Showing cached briefing from \(Fmt.age(cached[0].generatedAt))."
+        if !cached.isEmpty { persistSession() }
+        Task { await refreshPOILayers() }
+    }
+
+    /// Puts cached briefings on screen; their geometry stands in for routes
+    /// until the user re-finds them.
+    private func show(_ cached: [Briefing], selecting index: Int) {
         for b in cached {
             briefings[b.routeIndex] = b
             while routes.count <= b.routeIndex {
@@ -345,8 +365,29 @@ final class BriefingCoordinator {
             }
             routes[b.routeIndex] = b.geometry
         }
-        selectedRouteIndex = routes.isEmpty ? -1 : min(trip.selectedRouteIndex, routes.count - 1)
-        statusMessage = cached.isEmpty ? "Trip loaded — find routes to continue." : "Showing cached briefing from \(RelativeDateTimeFormatter().localizedString(for: cached[0].generatedAt, relativeTo: Date()))."
-        Task { await refreshPOILayers() }
+        selectedRouteIndex = routes.isEmpty ? -1 : max(0, min(index, routes.count - 1))
+    }
+
+    // MARK: Session persistence (task 8)
+
+    /// Writes the session's briefings as drafts plus the plan behind them,
+    /// so the latest briefing survives a relaunch without an explicit Save.
+    private func persistSession(_ all: [Int: Briefing]? = nil) {
+        do {
+            try env.trips.replaceDrafts(with: Array((all ?? briefings).values))
+            env.settings.session = AppSettings.Session(plan: plan, selectedRouteIndex: selectedRouteIndex, tripID: loadedTrip?.id)
+        } catch {
+            errorMessage = "Couldn't cache the briefing on this device: \(error.localizedDescription)"
+        }
+    }
+
+    private func restoreSession() {
+        guard let session = env.settings.session else { return }
+        let drafts = env.trips.draftBriefings()
+        guard !drafts.isEmpty else { return }
+        plan = session.plan
+        if let id = session.tripID { loadedTrip = env.trips.allTrips().first { $0.id == id } }
+        show(drafts, selecting: session.selectedRouteIndex)
+        statusMessage = "Restored your last briefing (generated \(Fmt.age(drafts[0].generatedAt)))."
     }
 }
