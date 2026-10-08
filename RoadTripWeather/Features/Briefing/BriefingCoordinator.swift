@@ -388,6 +388,11 @@ final class BriefingCoordinator {
 
     /// Web `insertManualStop` from a POI pin ("Add as fuel stop").
     func addStop(from poi: POI) async {
+        // The planner may already have put this place in the briefing.
+        if let existing = briefing?.stops.first(where: { $0.poiSourceID == poi.sourceID }) {
+            statusMessage = "“\(existing.label)” is already a stop."
+            return
+        }
         await addStop(ManualStopEdit(coordinate: poi.coordinate, label: poi.name, poiKind: poi.kind, poiSourceID: poi.sourceID))
     }
 

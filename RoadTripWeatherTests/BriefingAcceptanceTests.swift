@@ -136,6 +136,18 @@ struct BriefingAcceptanceTests {
         let route = try #require(c.selectedRoute)
         for p in pins { #expect(Geo.minDistanceMiles(from: p.coordinate, to: route.coordinates) * Geo.metersPerMile <= 8000 + 1) }
 
+        // Pins the planner already made stops can't be added twice.
+        let planned = try #require(c.briefing).stops.compactMap(\.poiSourceID)
+        if let already = pins.first(where: { planned.contains($0.sourceID) }) {
+            let before = c.briefing
+            await c.addStop(from: already)
+            #expect(c.briefing == before)
+            #expect(c.statusMessage?.hasSuffix("is already a stop.") == true)
+        }
+        // A pin that isn't a stop yet: remove the planned Buc-ee's, then add it from the pin.
+        if let plannedStop = c.briefing?.stops.first(where: { $0.poiSourceID == bucees.sourceID }) {
+            c.removeStop(stopID: plannedStop.id)
+        }
         let countBefore = c.briefing?.stops.count ?? 0
         await c.addStop(from: bucees)
         let b = try #require(c.briefing)
