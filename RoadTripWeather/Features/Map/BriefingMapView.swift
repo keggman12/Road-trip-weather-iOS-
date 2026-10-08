@@ -51,7 +51,8 @@ struct BriefingMapView: View {
     struct Segment {
         var index: Int
         var coords: [Coordinate]
-        var color: Color
+        var colorHex: String
+        var color: Color { Color(hex: colorHex) }
     }
 
     /// Web `drawColoredRoute`.
@@ -59,7 +60,7 @@ struct BriefingMapView: View {
         zip(b.stops, b.stops.dropFirst()).enumerated().map { i, pair in
             let (a, c) = pair
             let avg = TemperatureScale.segmentTemperature(a.weather.map { Double($0.temperatureF) }, c.weather.map { Double($0.temperatureF) })
-            return Segment(index: i, coords: BriefingMapper.segmentCoordinates(b.geometry.coordinates, from: a, to: c), color: Color(hex: scale.colorHex(forTemperatureF: avg)))
+            return Segment(index: i, coords: BriefingMapper.segmentCoordinates(b.geometry.coordinates, from: a, to: c), colorHex: scale.colorHex(forTemperatureF: avg))
         }
     }
 }

@@ -9,6 +9,7 @@ struct PlanView: View {
     @Environment(AppEnvironment.self) private var env
     @Query(sort: \VehicleRecord.sortOrder) private var vehicles: [VehicleRecord]
     @State private var showRoutes = false
+    @FocusState private var rangeFocused: Bool
 
     var body: some View {
         Form {
@@ -53,6 +54,7 @@ struct PlanView: View {
                         .multilineTextAlignment(.trailing)
                         .monospacedDigit()
                         .frame(width: 80)
+                        .focused($rangeFocused)
                         .onChange(of: coordinator.plan.rangeMi) { _, new in
                             if let vid = coordinator.plan.vehicleID, let v = vehicles.first(where: { $0.id.uuidString == vid }), v.rangeMi != new {
                                 coordinator.plan.vehicleID = nil
@@ -95,8 +97,18 @@ struct PlanView: View {
             }
         }
         .scrollContentBackground(.hidden)
+        .scrollDismissesKeyboard(.interactively)
         .background(Theme.background)
         .navigationTitle("Road Trip Weather")
+        .toolbar {
+            ToolbarItemGroup(placement: .keyboard) {
+                Spacer()
+                Button("Done") { rangeFocused = false }
+            }
+        }
+        .onChange(of: rangeFocused) { _, focused in
+            if !focused { coordinator.plan.rangeMi = Vehicle.clampRange(coordinator.plan.rangeMi) }
+        }
         .navigationDestination(isPresented: $showRoutes) {
             RoutesView(coordinator: coordinator)
         }

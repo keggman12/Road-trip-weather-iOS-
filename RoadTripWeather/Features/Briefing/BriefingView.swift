@@ -113,16 +113,20 @@ struct DataAgeBanner: View {
     let briefing: Briefing
 
     var body: some View {
-        HStack {
-            Image(systemName: "clock")
-            Text("Briefing generated \(Fmt.age(briefing.generatedAt))")
-            Spacer()
-            if briefing.dataAge() > 6 * 3600 {
-                Tag(text: "aging", color: Theme.warn)
+        // Re-render each minute so "generated 3 hours ago" stays true while
+        // a cached briefing sits on screen.
+        TimelineView(.periodic(from: .now, by: 60)) { context in
+            HStack {
+                Image(systemName: "clock")
+                Text("Briefing generated \(Fmt.age(briefing.generatedAt, now: context.date))")
+                Spacer()
+                if briefing.dataAge(at: context.date) > 6 * 3600 {
+                    Tag(text: "aging", color: Theme.warn)
+                }
             }
+            .font(.caption)
+            .foregroundStyle(Theme.muted)
         }
-        .font(.caption)
-        .foregroundStyle(Theme.muted)
     }
 }
 
@@ -223,16 +227,35 @@ struct PrecipTimelineView: View {
         }
     }
 
+    enum BarTone: Equatable { case severe, high, normal }
+
+    /// Web: red for thunderstorm/severe/snow, amber from 50 %, else accent.
+    static func tone(_ p: Point) -> BarTone {
+        p.hazardous ? .severe : p.percent >= 50 ? .high : .normal
+    }
+
+    static func barColor(_ p: Point) -> Color {
+        switch tone(p) {
+        case .severe: Theme.danger
+        case .high: Theme.warn
+        case .normal: Theme.accent.opacity(0.7)
+        }
+    }
+
+    /// Web shows the value from 15 %.
+    static func showsValue(_ p: Point) -> Bool { p.percent >= 15 }
+
     var body: some View {
         let pts = points
         if pts.count >= 2 {
             VStack(alignment: .leading, spacing: 6) {
                 Text("Precip probability by stop").font(.caption).foregroundStyle(Theme.muted)
                 Chart(pts) { p in
-                    BarMark(x: .value("Stop", p.label), y: .value("Precip %", p.percent))
-                        .foregroundStyle(p.hazardous ? Theme.danger : p.percent >= 50 ? Theme.warn : Theme.accent.opacity(0.7))
+                    // Web draws at least a 1.5 px sliver so 0 % stops still show.
+                    BarMark(x: .value("Stop", p.label), y: .value("Precip %", max(Double(p.percent), 1.5)))
+                        .foregroundStyle(Self.barColor(p))
                         .annotation(position: .top) {
-                            if p.percent >= 15 { Text("\(p.percent)").font(.caption2.monospacedDigit()).foregroundStyle(Theme.muted) }
+                            if Self.showsValue(p) { Text("\(p.percent)").font(.caption2.monospacedDigit()).foregroundStyle(Theme.muted) }
                         }
                 }
                 .chartYScale(domain: 0...100)

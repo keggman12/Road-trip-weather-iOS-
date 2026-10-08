@@ -98,7 +98,7 @@ struct RouteRow: View {
                     if route.durationSec == fastest {
                         Tag(text: "Fastest", color: Theme.ok)
                     } else {
-                        Tag(text: "+\(Fmt.duration(route.durationSec - fastest))", color: Theme.muted)
+                        Tag(text: "+\(Fmt.duration(route.durationSec - fastest))", color: Theme.muted, uppercase: false)
                     }
                 }
                 HStack(spacing: 8) {
@@ -122,11 +122,12 @@ struct RouteRow: View {
 struct Tag: View {
     let text: String
     let color: Color
+    var uppercase = true
 
     var body: some View {
         Text(text)
             .font(.caption2.weight(.bold))
-            .textCase(.uppercase)
+            .textCase(uppercase ? .uppercase : nil)
             .padding(.horizontal, 6)
             .padding(.vertical, 2)
             .overlay(RoundedRectangle(cornerRadius: 4).stroke(color))

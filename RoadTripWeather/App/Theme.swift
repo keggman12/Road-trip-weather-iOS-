@@ -83,8 +83,11 @@ enum Fmt {
 
     static func miles(_ mi: Double) -> String { "\(Int(mi.rounded())) mi" }
 
-    static func age(_ date: Date) -> String {
-        RelativeDateTimeFormatter().localizedString(for: date, relativeTo: Date())
+    /// "just now" under a minute, else "3 hours ago". Never in the future:
+    /// a timestamp a few ms ahead of `now` used to read "in 0 seconds".
+    static func age(_ date: Date, now: Date = Date()) -> String {
+        guard now.timeIntervalSince(date) >= 60 else { return "just now" }
+        return RelativeDateTimeFormatter().localizedString(for: date, relativeTo: now)
     }
 }
 
