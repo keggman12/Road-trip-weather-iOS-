@@ -29,7 +29,7 @@ struct BriefingView: View {
                     Button { Task { await coordinator.refreshForecasts() } } label: { Label("Refresh forecasts", systemImage: "arrow.clockwise") }
                     Section("POI layers") {
                         ForEach(POIKind.allCases) { kind in
-                            Toggle(kind.displayName.capitalized, isOn: Binding(
+                            Toggle(kind.displayName.prefix(1).uppercased() + kind.displayName.dropFirst(), isOn: Binding(
                                 get: { coordinator.poiLayersEnabled.contains(kind) },
                                 set: { coordinator.setPOILayer(kind, enabled: $0) }
                             ))
