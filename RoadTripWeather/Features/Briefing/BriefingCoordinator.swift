@@ -121,6 +121,46 @@ final class BriefingCoordinator {
         Task { await refreshPOILayers() }
     }
 
+    /// Routes shown at most once "More routes" has added suggestions.
+    static let maxRoutesWithSuggestions = 6
+
+    /// "More routes": route through hub cities off to either side of the
+    /// trip and keep the ones that are genuinely different roads. Existing
+    /// routes (and their briefings) keep their indices. No weather calls.
+    func findMoreRoutes() async {
+        guard let origin = plan.origin, let destination = plan.destination,
+              !routes.isEmpty, routes.allSatisfy({ $0.coordinates.count >= 2 })
+        else { errorMessage = "Find routes first."; return }
+        errorMessage = nil
+        let hubs = RouteHubs.candidates(origin: origin.coordinate, destination: destination.coordinate, existingRoutes: routes.map(\.coordinates))
+        guard !hubs.isEmpty else { statusMessage = "No other distinct routes nearby."; return }
+        phase = .routing
+        defer { phase = .idle }
+        var suggested: [RouteGeometry] = []
+        for hub in hubs {
+            env.status.countCall(.mapkit)
+            guard let place = try? await env.geocoding.geocode(hub.query) else { continue }
+            env.status.countCall(.mapkit)
+            guard var r = try? await env.routing.chainedRoute(through: [origin, place, destination], departure: plan.departure) else { continue }
+            r.label = RouteHubs.label(for: hub)
+            suggested.append(r)
+        }
+        let before = routes.count
+        // Existing routes come first, so dedupe keeps them and their indices.
+        routes = RouteComparison.dedupe(routes + suggested.sorted { $0.durationSec < $1.durationSec }, maxRoutes: max(before, Self.maxRoutesWithSuggestions))
+        let added = routes.count - before
+        if added > 0 { env.status.recordSuccess(.mapkit, count: routes.count) }
+        statusMessage = added > 0
+            ? "Added \(added) suggested route\(added == 1 ? "" : "s") — brief one to compare its weather."
+            : "No other distinct routes found — the suggestions followed the same roads."
+    }
+
+    /// True when More routes can run (live routes, not a cached-only trip).
+    var canFindMoreRoutes: Bool {
+        !isBusy && plan.origin != nil && plan.destination != nil && !routes.isEmpty
+            && routes.allSatisfy { $0.coordinates.count >= 2 } && routes.count < Self.maxRoutesWithSuggestions
+    }
+
     /// Names each alternative after a place only it passes ("via Lamar, CO")
     /// so similar-looking routes can be told apart. One reverse geocode per
     /// route; the user's "via …" labels are kept.

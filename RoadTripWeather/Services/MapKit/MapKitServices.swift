@@ -53,16 +53,8 @@ struct MapKitRoutingService: RoutingService {
             return RoutingResult(routes: routes, note: note)
         }
 
-        var legs: [RouteGeometry] = []
-        var legStart = departure
-        for (a, b) in zip(points, points.dropFirst()) {
-            let leg = try await directions(from: a, to: b, departure: legStart, alternates: false)
-            guard let best = leg.first else { throw ServiceError.noRoute }
-            legs.append(best)
-            legStart = legStart.addingTimeInterval(best.durationSec)
-        }
         let viaLabel = "via " + points.dropFirst().dropLast().map(\.shortLabel).joined(separator: " · ")
-        var routes = [RouteGeometry.chained(legs, label: viaLabel)]
+        var routes = [try await chained(points, departure: departure, label: viaLabel)]
         // Direct routes with alternates for comparison (best-effort). The
         // best direct route often follows the via route anyway; dedupe drops
         // it so a genuinely different road (e.g. east through Kansas) shows.
@@ -72,6 +64,22 @@ struct MapKitRoutingService: RoutingService {
             routes.append(d)
         }
         return RoutingResult(routes: RouteComparison.dedupe(routes), note: nil)
+    }
+
+    func chainedRoute(through points: [PlacePoint], departure: Date) async throws -> RouteGeometry {
+        try await chained(points, departure: departure, label: nil)
+    }
+
+    private func chained(_ points: [PlacePoint], departure: Date, label: String?) async throws -> RouteGeometry {
+        var legs: [RouteGeometry] = []
+        var legStart = departure
+        for (a, b) in zip(points, points.dropFirst()) {
+            let leg = try await directions(from: a, to: b, departure: legStart, alternates: false)
+            guard let best = leg.first else { throw ServiceError.noRoute }
+            legs.append(best)
+            legStart = legStart.addingTimeInterval(best.durationSec)
+        }
+        return RouteGeometry.chained(legs, label: label)
     }
 
     private func directions(from a: PlacePoint, to b: PlacePoint, departure: Date, alternates: Bool) async throws -> [RouteGeometry] {

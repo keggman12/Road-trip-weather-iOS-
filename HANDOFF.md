@@ -96,6 +96,10 @@ xcodebuild -project RoadTripWeather.xcodeproj -scheme RoadTripWeather \
 - Route list: via trips also request the direct route **with alternates**; near-duplicates
   (≥ 90 % mutual overlap within 3 mi, `RouteComparison`) are dropped, max 4 routes, and each
   alternative is named after a place only it passes ("via Lamar, CO").
+- **More routes** (Routes screen): up to 4 hub cities (`RouteHubs`, ~150 built-in) off both
+  sides of the trip, ≤ 35 % detour, ≥ 25 mi from existing routes; each is geocoded by name and
+  routed origin → hub → destination (ignores the user's vias), deduped, max 6 routes,
+  labelled "Suggested · via Woodward, OK". ~3 MapKit calls per hub, only on tap.
 - Geocoded places whose name differs from what was typed are flagged (e.g. "Rotan, New Mexico"
   → Raton, NM). A new search detaches from the loaded saved trip; default names include vias.
 

@@ -49,6 +49,17 @@ struct RoutesView: View {
                         }.frame(maxWidth: .infinity)
                     }
                     .disabled(coordinator.isBusy || coordinator.selectedRouteIndex < 0)
+                    if coordinator.canFindMoreRoutes || coordinator.routes.count >= BriefingCoordinator.maxRoutesWithSuggestions {
+                        Button {
+                            Task { await coordinator.findMoreRoutes() }
+                        } label: {
+                            Label("More routes (suggest roads Apple Maps didn't offer)", systemImage: "point.topleft.down.to.point.bottomright.curvepath")
+                        }
+                        .disabled(!coordinator.canFindMoreRoutes)
+                    }
+                    if let msg = coordinator.statusMessage, msg.contains("suggested route") || msg.contains("distinct routes") {
+                        Text(msg).font(.footnote).foregroundStyle(Theme.muted)
+                    }
                     if realRoutes.count > 1 {
                         Button("Brief all routes (compare weather)") {
                             Task {

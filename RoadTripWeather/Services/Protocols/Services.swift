@@ -21,6 +21,16 @@ struct RoutingResult: Sendable {
 protocol RoutingService: Sendable {
     /// `points` is origin, vias…, destination (at least two).
     func routes(through points: [PlacePoint], departure: Date) async throws -> RoutingResult
+    /// One route chained through `points`, without fetching alternatives or
+    /// a direct comparison ("More routes").
+    func chainedRoute(through points: [PlacePoint], departure: Date) async throws -> RouteGeometry
+}
+
+extension RoutingService {
+    func chainedRoute(through points: [PlacePoint], departure: Date) async throws -> RouteGeometry {
+        guard let r = try await routes(through: points, departure: departure).routes.first else { throw ServiceError.noRoute }
+        return r
+    }
 }
 
 /// Reverse-geocoded facts about a coordinate.
