@@ -41,8 +41,8 @@ targets:
       path: RoadTripWeather/Resources/Info.plist
       properties:
         CFBundleDisplayName: Road Trip Weather
-        CFBundleShortVersionString: "0.1.0"
-        CFBundleVersion: "1"
+        CFBundleShortVersionString: "$(MARKETING_VERSION)"
+        CFBundleVersion: "$(CURRENT_PROJECT_VERSION)"
         UILaunchScreen: {}
         UISupportedInterfaceOrientations: [UIInterfaceOrientationPortrait]
         UIUserInterfaceStyle: Dark
@@ -60,6 +60,9 @@ targets:
     settings:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: com.keggman12.RoadTripWeather
+        MARKETING_VERSION: "0.1.0"
+        # Bump for every TestFlight upload (or pass CURRENT_PROJECT_VERSION=N to xcodebuild).
+        CURRENT_PROJECT_VERSION: "1"
         TARGETED_DEVICE_FAMILY: "1"
         ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon
         ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME: AccentColor
