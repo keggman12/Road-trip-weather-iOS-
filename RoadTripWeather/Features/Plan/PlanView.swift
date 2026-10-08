@@ -87,7 +87,7 @@ struct PlanView: View {
                     }
                     .frame(maxWidth: .infinity)
                 }
-                .disabled(coordinator.isBusy || coordinator.plan.originText.isEmpty || coordinator.plan.destinationText.isEmpty)
+                .disabled(!coordinator.canFindRoutes)
                 if let e = coordinator.errorMessage {
                     Text(e).foregroundStyle(Theme.danger).font(.footnote)
                 }

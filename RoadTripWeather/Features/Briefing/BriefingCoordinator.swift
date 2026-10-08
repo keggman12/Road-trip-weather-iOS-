@@ -46,6 +46,14 @@ final class BriefingCoordinator {
 
     // MARK: Phase 1 — find routes (no weather calls)
 
+    /// Find Routes is enabled once origin and destination have text (blank
+    /// or whitespace doesn't count) and nothing else is running.
+    var canFindRoutes: Bool {
+        !isBusy
+            && !plan.originText.trimmingCharacters(in: .whitespaces).isEmpty
+            && !plan.destinationText.trimmingCharacters(in: .whitespaces).isEmpty
+    }
+
     func findRoutes() async {
         errorMessage = nil
         let originText = plan.originText.trimmingCharacters(in: .whitespaces)
