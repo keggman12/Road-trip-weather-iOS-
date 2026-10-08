@@ -11,13 +11,13 @@ first Mac session**, which built, signed, tested and ran the app. Branch:
 | Area | State | Verified how |
 |---|---|---|
 | `docs/` (feature map, gaps, data model, phase-1 tasks) | done | reviewed by owner |
-| `Packages/RoadTripCore` (models + all pure logic) | done, 91 tests | `swift test` green on Linux **and macOS** (Swift 6.4) |
+| `Packages/RoadTripCore` (models + all pure logic) | done, 94 tests | `swift test` green on Linux **and macOS** (Swift 6.4) |
 | `tools/poi-snapshot` (Mac harvester) | done | run for real: 57 Buc-ee's, 619 Love's, 3,622 rest areas |
 | `RoadTripWeather/Resources/pois-snapshot.json` | real data, 1.2 MB | counts above |
 | `project.yml` (XcodeGen) | generates cleanly | Xcode 27.0, team `D69L37WPA3` set |
 | App target (SwiftUI, SwiftData, MapKit, WeatherKit, NWS) | builds with zero warnings, runs | iPhone 17 simulator + signed device build |
 | Signing / capabilities | done | App ID `com.keggman12.RoadTripWeather`: WeatherKit (Capabilities + App Services), iCloud/CloudKit, Push; container `iCloud.com.keggman12.RoadTripWeather`; live WeatherKit calls succeed |
-| App tests (`RoadTripWeatherTests/`) | 45 tests, green | `xcodebuild test` (see §2) |
+| App tests (`RoadTripWeatherTests/`) | 62 tests, green | `xcodebuild test` (see §2) |
 
 ### Phase-1 tasks (`docs/phase1-tasks.md`)
 
@@ -42,7 +42,7 @@ xcodegen generate                                         # after any project.ym
 swift test --package-path Packages/RoadTripCore           # 85 tests
 xcodebuild -project RoadTripWeather.xcodeproj -scheme RoadTripWeather \
   -destination 'platform=iOS Simulator,name=iPhone 17' \
-  -collect-test-diagnostics never test                    # 45 app + 91 Core tests
+  -collect-test-diagnostics never test                    # 62 app + 94 Core tests
 ```
 
 - **`-collect-test-diagnostics never` matters**: without it, a failing test leaves xcodebuild
@@ -84,6 +84,8 @@ xcodebuild -project RoadTripWeather.xcodeproj -scheme RoadTripWeather \
 - Daily-forecast fallback uses mean(high, low); WeatherKit horizon 10 days → `beyondHorizon`.
 - NWS User-Agent = app name + repo URL (+ optional email from Settings).
 - NWS retries only 429, 5xx and transient network errors (the web never retried).
+- The OCM key goes in the `X-API-Key` header, not the URL (the web put it in the query).
+- The optimizer scores sampled waypoints only (no user edits, no chargers), like the web.
 
 ## 5. Architecture in one minute
 
@@ -109,10 +111,12 @@ xcodebuild -project RoadTripWeather.xcodeproj -scheme RoadTripWeather \
 
 ## 6. What's next
 
-1. Phase 2 — task list with acceptance criteria in `docs/phase2-tasks.md`.
-   Done: **P2-1 GPX export** (`GPXBuilder`, byte-identical to the web's `buildGPX` via
-   `tools/web-reference/gen-gpx.mjs`; share sheet), **P2-2 Navigate** (Apple Maps / Waze per
-   stop). Next: P2-3 manual stop entry, P2-4 optimizer, P2-5 Superchargers.
+1. Phase 2 is implemented (`docs/phase2-tasks.md`), each task with tests:
+   P2-1 GPX export (byte-identical to the web via `gen-gpx.mjs`), P2-2 Navigate (Apple Maps /
+   Waze), P2-3 manual stop entry, P2-4 best-time-to-leave optimizer (list or departure × route
+   matrix), P2-5 Superchargers (Open Charge Map, parsing pinned to the web via `gen-ocm.mjs`).
+   **Not yet checked with a real OCM key** — add one in Settings, pick the Tesla vehicle, brief
+   a route, and confirm the "⚡ Supercharger" line on stop cards and the Data Sources row.
 2. Polish noticed in the simulator, not yet done: the Find Routes button sits under the floating
    tab bar until you scroll; the overnight toggle on stop cards has no visible label; wind text
    truncates on stop cards.

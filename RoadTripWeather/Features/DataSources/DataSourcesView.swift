@@ -72,7 +72,7 @@ struct DataSourcesView: View {
             row.state = "Last success \(Fmt.age(ok, now: now)) · \(n) record\(n == 1 ? "" : "s")"
             row.isSuccess = true
         } else if source == .openChargeMap {
-            row.state = ocmKeyStored ? "key stored — used by the Supercharger lookup (Phase 2)" : "disabled — add a key in Settings"
+            row.state = ocmKeyStored ? "key stored — used when briefing an EV" : "disabled — add a key in Settings"
         }
         if let err = status?.lastError {
             row.error = "Error\(status?.lastErrorAt.map { " \(Fmt.age($0, now: now))" } ?? ""): \(err)"

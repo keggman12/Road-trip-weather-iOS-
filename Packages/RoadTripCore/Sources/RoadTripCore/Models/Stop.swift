@@ -50,6 +50,8 @@ public struct Stop: Hashable, Codable, Sendable, Identifiable {
     public var forecastFor: Date?
     public var horizon: ForecastHorizon
     public var alerts: [WeatherAlert]
+    /// Nearest Superchargers (EV vehicles with an OCM key; Phase 2).
+    public var chargers: [Charger]
 
     public init(
         id: UUID = UUID(),
@@ -72,7 +74,8 @@ public struct Stop: Hashable, Codable, Sendable, Identifiable {
         weather: WeatherSnapshot? = nil,
         forecastFor: Date? = nil,
         horizon: ForecastHorizon = .failed,
-        alerts: [WeatherAlert] = []
+        alerts: [WeatherAlert] = [],
+        chargers: [Charger] = []
     ) {
         self.id = id
         self.kind = kind
@@ -95,6 +98,7 @@ public struct Stop: Hashable, Codable, Sendable, Identifiable {
         self.forecastFor = forecastFor
         self.horizon = horizon
         self.alerts = alerts
+        self.chargers = chargers
     }
 
     public var isOvernight: Bool { manualOvernight || autoOvernight }

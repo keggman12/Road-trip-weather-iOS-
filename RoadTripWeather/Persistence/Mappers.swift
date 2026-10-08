@@ -55,6 +55,7 @@ enum BriefingMapper {
             s.offRouteMi = stop.offRouteMi
             s.forecastForDate = stop.forecastFor
             s.horizonRaw = stop.horizon.rawValue
+            s.chargersData = stop.chargers.isEmpty ? nil : JSONCoding.encode(stop.chargers)
             if let w = stop.weather {
                 let wr = WeatherSnapshotRecord()
                 wr.recordDate = w.recordDate
@@ -191,7 +192,8 @@ enum BriefingMapper {
             weather: weather,
             forecastFor: s.forecastForDate,
             horizon: ForecastHorizon(rawValue: s.horizonRaw) ?? (weather == nil ? .failed : .ok),
-            alerts: alerts
+            alerts: alerts,
+            chargers: JSONCoding.decode([Charger].self, from: s.chargersData) ?? []
         )
     }
 }

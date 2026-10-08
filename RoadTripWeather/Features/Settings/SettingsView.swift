@@ -23,7 +23,7 @@ struct SettingsView: View {
                 }
                 Section("Superchargers (Open Charge Map)") {
                     SecureField("Open Charge Map API key", text: Bindable(env.settings).openChargeMapKey)
-                    Text(env.settings.openChargeMapKey.isEmpty ? "Disabled until a key is entered. Stored in the Keychain." : "Enabled for EV vehicles (Phase 2).")
+                    Text(env.settings.openChargeMapKey.isEmpty ? "Disabled until a key is entered. Stored in the Keychain." : "EV vehicles get up to 2 Superchargers within 30 mi of each stop.")
                         .font(.caption).foregroundStyle(Theme.muted)
                 }
                 Section("Data") {

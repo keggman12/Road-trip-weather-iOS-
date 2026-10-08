@@ -1,0 +1,166 @@
+{
+  "cases": [
+    {
+      "name": "typical",
+      "payload": [
+        {
+          "AddressInfo": {
+            "Title": "Amarillo, TX Supercharger",
+            "Latitude": 35.1872,
+            "Longitude": -101.8695,
+            "Distance": 3.2671,
+            "Town": "Amarillo",
+            "StateOrProvince": "TX"
+          },
+          "NumberOfPoints": 12,
+          "Connections": [
+            {
+              "PowerKW": 250
+            },
+            {
+              "PowerKW": 72
+            },
+            {}
+          ]
+        },
+        {
+          "AddressInfo": {
+            "Title": "Canyon Supercharger",
+            "Latitude": 34.9803,
+            "Longitude": -101.9188,
+            "Distance": 17.95,
+            "Town": "Canyon"
+          },
+          "NumberOfPoints": 0,
+          "Connections": []
+        }
+      ],
+      "chargers": [
+        {
+          "name": "Amarillo, TX Supercharger",
+          "lat": 35.1872,
+          "lon": -101.8695,
+          "distanceMi": 3.3,
+          "town": "Amarillo, TX",
+          "stalls": 12,
+          "powerKW": 250
+        },
+        {
+          "name": "Canyon Supercharger",
+          "lat": 34.9803,
+          "lon": -101.9188,
+          "distanceMi": 18,
+          "town": "Canyon",
+          "stalls": null,
+          "powerKW": null
+        }
+      ]
+    },
+    {
+      "name": "sparse",
+      "payload": [
+        {
+          "AddressInfo": {
+            "Latitude": 36,
+            "Longitude": -102
+          }
+        },
+        {
+          "AddressInfo": {
+            "Title": "No coords"
+          }
+        },
+        {
+          "AddressInfo": {
+            "Title": "Half coords",
+            "Latitude": 36.1
+          }
+        },
+        {
+          "AddressInfo": {
+            "Title": "Zero kW",
+            "Latitude": 36.2,
+            "Longitude": -102.2,
+            "Distance": 0.04,
+            "StateOrProvince": "NM"
+          },
+          "NumberOfPoints": 4,
+          "Connections": [
+            {
+              "PowerKW": 0
+            },
+            {
+              "PowerKW": null
+            }
+          ]
+        }
+      ],
+      "chargers": [
+        {
+          "name": "Supercharger",
+          "lat": 36,
+          "lon": -102,
+          "distanceMi": null,
+          "town": "",
+          "stalls": null,
+          "powerKW": null
+        },
+        {
+          "name": "Zero kW",
+          "lat": 36.2,
+          "lon": -102.2,
+          "distanceMi": 0,
+          "town": "NM",
+          "stalls": 4,
+          "powerKW": null
+        }
+      ]
+    },
+    {
+      "name": "notArray",
+      "payload": {
+        "error": "bad key"
+      },
+      "chargers": []
+    },
+    {
+      "name": "httpError",
+      "payload": [
+        {
+          "AddressInfo": {
+            "Title": "Amarillo, TX Supercharger",
+            "Latitude": 35.1872,
+            "Longitude": -101.8695,
+            "Distance": 3.2671,
+            "Town": "Amarillo",
+            "StateOrProvince": "TX"
+          },
+          "NumberOfPoints": 12,
+          "Connections": [
+            {
+              "PowerKW": 250
+            },
+            {
+              "PowerKW": 72
+            },
+            {}
+          ]
+        },
+        {
+          "AddressInfo": {
+            "Title": "Canyon Supercharger",
+            "Latitude": 34.9803,
+            "Longitude": -101.9188,
+            "Distance": 17.95,
+            "Town": "Canyon"
+          },
+          "NumberOfPoints": 0,
+          "Connections": []
+        }
+      ],
+      "httpOK": false,
+      "chargers": []
+    }
+  ],
+  "url": "https://api.openchargemap.io/v3/poi/?output=json&latitude=35.2220&longitude=-101.8313&distance=30&distanceunit=Miles&maxresults=2&operatorid=23&compact=true&verbose=false&key=test%20key%2F%2B%26"
+}

@@ -126,4 +126,5 @@ struct MockPOIService: POIService {
 
 struct MockChargerService: ChargerService {
     var isConfigured: Bool { false }
+    func superchargers(near coordinate: Coordinate) async throws -> [Charger] { [] }
 }

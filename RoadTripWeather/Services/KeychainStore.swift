@@ -52,12 +52,3 @@ struct KeychainStore: Sendable {
 
     static let openChargeMapAccount = "openchargemap-api-key"
 }
-
-/// Phase 2: Tesla Supercharger lookup. Disabled until the user stores a key.
-struct OpenChargeMapService: ChargerService {
-    let keychain: KeychainStore
-
-    var isConfigured: Bool {
-        !(keychain.read(KeychainStore.openChargeMapAccount) ?? "").isEmpty
-    }
-}

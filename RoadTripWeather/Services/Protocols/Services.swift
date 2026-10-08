@@ -60,9 +60,13 @@ protocol POIService: Sendable {
     func refresh(kind: POIKind) async throws -> POIRefreshOutcome
 }
 
-/// Optional Tesla Supercharger lookup (Phase 2).
+/// Optional Tesla Supercharger lookup (web `getSuperchargersNear`).
 protocol ChargerService: Sendable {
+    /// True once the user stored an Open Charge Map key.
     var isConfigured: Bool { get async }
+    /// Up to 2 Superchargers within 30 mi. Throws on transport/HTTP failure;
+    /// callers treat that as "none" so a briefing never fails over chargers.
+    func superchargers(near coordinate: Coordinate) async throws -> [Charger]
 }
 
 enum ServiceError: LocalizedError {

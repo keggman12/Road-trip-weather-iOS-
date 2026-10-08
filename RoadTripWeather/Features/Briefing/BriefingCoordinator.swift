@@ -134,11 +134,12 @@ final class BriefingCoordinator {
         // Built off-screen: nothing reaches `briefings` (and the UI) until
         // it is complete and persisted.
         var fresh: [Int: Briefing] = [:]
+        let wantChargers = await chargersWanted()
         for j in indices {
-            if let b = await brief(routeIndex: j, label: routes[j].label ?? "Route \(j + 1)") { fresh[j] = b }
+            if let b = await brief(routeIndex: j, label: routes[j].label ?? "Route \(j + 1)", withChargers: wantChargers) { fresh[j] = b }
         }
         if let edits = plan.stopEdits.isEmpty ? nil : plan.stopEdits, var b = fresh[selectedRouteIndex] {
-            await replayEdits(edits, into: &b)
+            await replayEdits(edits, into: &b, withChargers: wantChargers)
             fresh[selectedRouteIndex] = b
             plan.stopEdits = StopEdits()
         }
@@ -162,7 +163,7 @@ final class BriefingCoordinator {
 
     /// Builds one route's briefing off-screen. `departure` overrides the plan's
     /// (optimizer candidates); `progress` replaces the briefing phase updates.
-    func brief(routeIndex j: Int, label: String, departure: Date? = nil, progress: ((Int, Int) -> Void)? = nil) async -> Briefing? {
+    func brief(routeIndex j: Int, label: String, departure: Date? = nil, withChargers: Bool = false, progress: ((Int, Int) -> Void)? = nil) async -> Briefing? {
         let route = routes[j]
         let (stops0, totalMi) = StopListBuilder.initialStops(
             route: route,
@@ -191,7 +192,7 @@ final class BriefingCoordinator {
         await resolveTimeZones(&b)
         // Time zones can change overnight resume times, so recompute.
         ETACalculator.recompute(&b, fallbackTimeZone: plan.departureTimeZone)
-        await fetchWeather(for: &b, indices: Array(b.stops.indices), routeLabel: label, progress: progress)
+        await fetchWeather(for: &b, indices: Array(b.stops.indices), routeLabel: label, withChargers: withChargers, progress: progress)
         b.generatedAt = Date()
         return b
     }
@@ -206,23 +207,46 @@ final class BriefingCoordinator {
 
     /// Fetches weather + alerts for the given stops concurrently (web
     /// `fetchStopWeather`). Failures leave `weather == nil`, `horizon == .failed`.
+    /// Web `wantChargers`: an EV vehicle and an Open Charge Map key.
+    func chargersWanted() async -> Bool {
+        guard let id = plan.vehicleID.flatMap(UUID.init(uuidString:)),
+              env.trips.vehicles().first(where: { $0.id == id })?.isEV == true
+        else { return false }
+        return await env.chargers.isConfigured
+    }
+
+    private struct StopFetch: Sendable {
+        var index: Int
+        var forecast: ForecastResult?
+        var alerts: [WeatherAlert]
+        /// nil when chargers weren't requested for this stop.
+        var chargers: Result<[Charger], ChargerLookupError>?
+    }
+
+    struct ChargerLookupError: Error { var message: String }
+
+    /// Web `fetchStopWeather`: forecast + alerts (+ Superchargers when
+    /// `withChargers`, never for the origin) for each stop, concurrently.
     /// `progress(done, total)` defaults to the briefing phase for `routeLabel`.
-    func fetchWeather(for b: inout Briefing, indices: [Int], routeLabel: String, progress: ((Int, Int) -> Void)? = nil) async {
+    func fetchWeather(for b: inout Briefing, indices: [Int], routeLabel: String, withChargers: Bool = false, progress: ((Int, Int) -> Void)? = nil) async {
         let total = indices.count
         var done = 0
         let snapshot = b
-        let results = await withTaskGroup(of: (Int, ForecastResult?, [WeatherAlert]).self, returning: [(Int, ForecastResult?, [WeatherAlert])].self) { group in
+        let results = await withTaskGroup(of: StopFetch.self, returning: [StopFetch].self) { group in
             for i in indices {
                 let stop = snapshot.stops[i]
                 let weather = env.weather
                 let alerts = env.alerts
+                let chargers = env.chargers
+                let wantChargers = withChargers && stop.kind != .origin
                 group.addTask {
                     async let f: ForecastResult? = try? await weather.forecast(at: stop.coordinate, for: stop.eta)
                     async let a = alerts.alerts(at: stop.coordinate, eta: stop.eta)
-                    return (i, await f, await a)
+                    async let c: Result<[Charger], ChargerLookupError>? = wantChargers ? Self.lookUpChargers(chargers, near: stop.coordinate) : nil
+                    return StopFetch(index: i, forecast: await f, alerts: await a, chargers: await c)
                 }
             }
-            var out: [(Int, ForecastResult?, [WeatherAlert])] = []
+            var out: [StopFetch] = []
             for await r in group {
                 out.append(r)
                 done += 1
@@ -231,9 +255,12 @@ final class BriefingCoordinator {
             return out
         }
         var failed: [String] = []
-        for (i, forecast, alerts) in results.sorted(by: { $0.0 < $1.0 }) {
+        var chargerCount = 0
+        var chargerErrors: [String] = []
+        for r in results.sorted(by: { $0.index < $1.index }) {
+            let i = r.index
             env.status.countCall(.weatherkit)
-            if let forecast {
+            if let forecast = r.forecast {
                 b.stops[i].weather = forecast.snapshot
                 b.stops[i].horizon = forecast.horizon
             } else {
@@ -242,7 +269,19 @@ final class BriefingCoordinator {
                 failed.append(b.stops[i].label)
             }
             b.stops[i].forecastFor = b.stops[i].eta
-            b.stops[i].alerts = alerts
+            b.stops[i].alerts = r.alerts
+            switch r.chargers {
+            case nil:
+                break
+            case let .success(found)?:
+                env.status.countCall(.openChargeMap)
+                b.stops[i].chargers = found
+                chargerCount += found.count
+            case let .failure(e)?:
+                env.status.countCall(.openChargeMap)
+                b.stops[i].chargers = []
+                chargerErrors.append(e.message)
+            }
         }
         if failed.count < results.count {
             env.status.recordSuccess(.weatherkit, count: results.count - failed.count)
@@ -250,6 +289,16 @@ final class BriefingCoordinator {
         if !failed.isEmpty {
             env.status.recordError(.weatherkit, "\(failed.count) of \(results.count) forecasts failed (\(failed.prefix(3).joined(separator: ", ")))")
         }
+        let lookups = results.filter { $0.chargers != nil }.count
+        if lookups > chargerErrors.count { env.status.recordSuccess(.openChargeMap, count: chargerCount) }
+        if let first = chargerErrors.first {
+            env.status.recordError(.openChargeMap, "\(chargerErrors.count) of \(lookups) lookups failed (\(first))")
+        }
+    }
+
+    private nonisolated static func lookUpChargers(_ service: any ChargerService, near c: Coordinate) async -> Result<[Charger], ChargerLookupError> {
+        do { return .success(try await service.superchargers(near: c)) }
+        catch { return .failure(ChargerLookupError(message: error.localizedDescription)) }
     }
 
     // MARK: Stop mutations (web onStopsMutated / refreshForecasts / insert / remove)
@@ -337,7 +386,7 @@ final class BriefingCoordinator {
             ETACalculator.recompute(&b, fallbackTimeZone: plan.departureTimeZone)
         }
         phase = .refreshing(done: 0, total: 1)
-        await fetchWeather(for: &b, indices: [i], routeLabel: b.routeLabel ?? "") { [weak self] done, total in
+        await fetchWeather(for: &b, indices: [i], routeLabel: b.routeLabel ?? "", withChargers: await chargersWanted()) { [weak self] done, total in
             self?.phase = .refreshing(done: done, total: total)
         }
         briefings[selectedRouteIndex] = b
@@ -348,7 +397,7 @@ final class BriefingCoordinator {
         return true
     }
 
-    private func replayEdits(_ edits: StopEdits, into b: inout Briefing) async {
+    private func replayEdits(_ edits: StopEdits, into b: inout Briefing, withChargers: Bool) async {
         for id in StopEditReplayer.stopsToRemove(in: b.stops, removedMi: edits.removedMi) {
             StopEditReplayer.remove(stopID: id, from: &b)
         }
@@ -366,7 +415,7 @@ final class BriefingCoordinator {
             // Indices may have shifted after recompute's sort; refetch by id.
             let ids = Set(added.compactMap { b.stops.indices.contains($0) ? b.stops[$0].id : nil })
             let indices = b.stops.indices.filter { ids.contains(b.stops[$0].id) }
-            await fetchWeather(for: &b, indices: indices, routeLabel: b.routeLabel ?? "")
+            await fetchWeather(for: &b, indices: indices, routeLabel: b.routeLabel ?? "", withChargers: withChargers)
         }
     }
 

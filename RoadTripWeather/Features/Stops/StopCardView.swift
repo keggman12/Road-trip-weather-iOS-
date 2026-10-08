@@ -53,6 +53,12 @@ struct StopCardView: View {
                 FlowRow(items: stop.alerts.map { "⚠ \($0.event)" }, color: Theme.danger)
             }
 
+            if let charger = stop.chargers.first {
+                (Text("⚡ Supercharger: ").foregroundStyle(Theme.warn) + Text(charger.summary))
+                    .font(.caption)
+                    .accessibilityLabel("Nearest Supercharger: \(charger.summary)")
+            }
+
             if let w = stop.weather {
                 FlowRow(items: metaChips(w), color: Theme.muted)
             } else {
