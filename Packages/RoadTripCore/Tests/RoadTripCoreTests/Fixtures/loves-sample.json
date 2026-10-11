@@ -1,0 +1,55 @@
+{
+  "stores": [
+    {
+      "number": 312,
+      "name": "Love's Travel Stop #312",
+      "mapPinUrl": "https://www.loves.com/-/media/pins/travelstop.png",
+      "latitude": 35.2141,
+      "longitude": -101.7023,
+      "city": "Amarillo",
+      "state": "TX",
+      "highway": "I-40",
+      "exitNumber": "Exit 76"
+    },
+    {
+      "number": "845",
+      "name": "Love's Travel Stop #845",
+      "mapPinUrl": "/pins/TravelStop_pin.png",
+      "latitude": "34.1743",
+      "longitude": "-97.1434",
+      "city": "Ardmore",
+      "state": "OK",
+      "highway": "I-35",
+      "exitNumber": ""
+    },
+    {
+      "number": 501,
+      "name": "Love's Country Store #501",
+      "mapPinUrl": "https://www.loves.com/-/media/pins/countrystore.png",
+      "latitude": 35.5,
+      "longitude": -97.5,
+      "city": "Guthrie",
+      "state": "OK"
+    },
+    {
+      "number": 7001,
+      "name": "Speedco #7001",
+      "mapPinUrl": "https://www.loves.com/-/media/pins/speedco.png",
+      "latitude": 35.6,
+      "longitude": -97.6,
+      "city": "Oklahoma City",
+      "state": "OK"
+    },
+    {
+      "mapPinUrl": "travelstop",
+      "latitude": 35.1,
+      "longitude": -101.9
+    },
+    {
+      "number": 9,
+      "mapPinUrl": "travelstop",
+      "latitude": "not-a-number",
+      "longitude": -101.9
+    }
+  ]
+}

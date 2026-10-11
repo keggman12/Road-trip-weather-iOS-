@@ -1,0 +1,11 @@
+{
+  "version": 0.6,
+  "generator": "Overpass API 0.7.62",
+  "osm3s": { "timestamp_osm_base": "2026-06-10T00:00:00Z" },
+  "elements": [
+    { "type": "node", "id": 1001, "lat": 35.2141, "lon": -101.7023, "tags": { "amenity": "fuel", "brand": "Love's", "brand:wikidata": "Q1872496", "name": "Love's Travel Stop" } },
+    { "type": "way", "id": 2002, "center": { "lat": 35.2149, "lon": -101.7031 }, "tags": { "building": "retail", "brand": "Love's" } },
+    { "type": "node", "id": 1003, "lat": 34.1743, "lon": -97.1434, "tags": { "amenity": "fuel", "brand": "Love's" } },
+    { "type": "relation", "id": 3004, "tags": { "name": "no center" } }
+  ]
+}
