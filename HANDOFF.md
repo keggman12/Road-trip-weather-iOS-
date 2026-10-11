@@ -1,7 +1,8 @@
 # HANDOFF — Road Trip Weather (iOS)
 
 Originally written 2026-10-08 by a cloud session with no Xcode; **updated 2026-10-08 after the
-first Mac session**, which built, signed, tested and ran the app. Branch:
+first Mac session**, which built, signed, tested and ran the app; **updated 2026-10-11** after
+the owner installed it on their iPhone (works well in real use) and it was merged to `main` (PR #1). Branch:
 `claude/quirky-mccarthy-wnet9m`. Owner: keggman12. Reference web app:
 `github.com/keggman12/roadtrip-weather-app` (read-only; cloned next to this repo as
 `../roadtrip-weather-app` for parity checks).
@@ -127,13 +128,21 @@ xcodebuild -project RoadTripWeather.xcodeproj -scheme RoadTripWeather \
 
 ## 6. What's next
 
-1. Phase 2 is implemented (`docs/phase2-tasks.md`), each task with tests:
-   P2-1 GPX export (byte-identical to the web via `gen-gpx.mjs`), P2-2 Navigate (Apple Maps /
-   Waze), P2-3 manual stop entry, P2-4 best-time-to-leave optimizer (list or departure × route
-   matrix), P2-5 Superchargers (Open Charge Map, parsing pinned to the web via `gen-ocm.mjs`).
-   **Not yet checked with a real OCM key** — add one in Settings, pick the Tesla vehicle, brief
-   a route, and confirm the "⚡ Supercharger" line on stop cards and the Data Sources row.
-2. Try Superchargers with a real OCM key (see 1), then TestFlight.
+Done so far, all with tests:
+- Phase 2 (`docs/phase2-tasks.md`): P2-1 GPX export (byte-identical to the web via
+  `gen-gpx.mjs`), P2-2 Navigate (Apple Maps / Waze), P2-3 manual stop entry, P2-4
+  best-time-to-leave optimizer (list or departure × route matrix), P2-5 Superchargers (Open
+  Charge Map, parsing pinned to the web via `gen-ocm.mjs`).
+- Route planning (decisions in §4): stops at real fuel stops within 90 % of range; route
+  alternatives that really differ, named by where they go; "More routes" via hub cities; renamed
+  places flagged; new searches save as new trips.
+- App icon, versioning and TestFlight export setup; installed and used on the owner's iPhone.
+
+Open:
+1. **Superchargers with a real OCM key**: add one in Settings, pick the Tesla vehicle, brief a
+   route, and confirm the "⚡ Supercharger" line on stop cards and the Data Sources row.
+2. **TestFlight**: the export setup is committed, but no build has been uploaded yet.
+3. Re-run `tools/poi-snapshot` on the Mac (phase-1 task 15 was only run on Linux).
 
 ## 7. Conventions
 
