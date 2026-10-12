@@ -1,0 +1,52 @@
+# Changelog — Road Trip Weather (iOS)
+
+Changes in user-visible behavior, written so the Android port can match them.
+Each entry names the iOS issue/PR. Platform details are in brackets.
+
+## Unreleased (TestFlight 0.1.0 builds 2–3)
+
+### Fixed
+- **Crash when editing or removing a via-point row** (#2, PR #6). The Plan form identified via
+  rows by their position in the list. Removing a row while another row was redrawing (e.g.
+  during voice dictation) read a position that no longer existed and crashed. Each via row now
+  has a stable ID, and edits and removals find the row by that ID. Saved sessions still store
+  vias as a plain list of strings.
+  *Port note:* key list rows by a stable ID, never by index, in any editable list.
+
+### Added
+- **Address suggestions while typing** (#4, PR #6) in Origin, Via, Destination and Add a stop.
+  - Suggestions start at 3 characters; show at most 5, each with a title and subtitle
+    (e.g. "Denver International Airport" / "Denver, CO"), listed under the field being edited.
+  - Picking one fills the field with "Title, Subtitle" and resolves it to an exact place
+    (coordinates + time zone). Find Routes and Add stop then use that place directly: no second
+    geocode and no "check the spelling" mismatch notice.
+  - Typing freely without picking still works and is geocoded as before. Suggestions
+    disappear when the field loses focus.
+  - Free, no API key, no server. [iOS: MapKit `MKLocalSearchCompleter`, results of type
+    address + point of interest.]
+- **Use current location** (#3, PR #6): a crosshairs button in each location field.
+  - The first tap asks for when-in-use location permission. The app takes one location fix and
+    reverse geocodes it.
+  - The field gets the street address ("123 Main St, Thornton, CO"). The place's display label is
+    the town ("Thornton, CO"), so trip names read "Thornton → Dallas".
+  - If nothing reverse geocodes, the field gets "lat, lon" to 5 decimals.
+  - Errors are shown under the field: permission off ("turn it on in Settings") or no fix
+    within 15 s ("try again, or type an address"). A spinner replaces the button while it works.
+- **Add a stop field (briefing screen) works like the Plan fields** (#8, PR #10):
+  suggestions, current location, recent places, clear button. A picked place is added as is.
+  Placeholder: "Add a stop (address, city or place)".
+- **Clear (ⓧ) button** (#9, PR #10) in every location field, shown only while the field has text.
+  Tapping it empties the field and keeps the cursor in it.
+
+### Changed
+- **Placeholders say what to type** (#5, PR #6): "Origin address or city",
+  "Via-point address or city", "Destination address or city". Once a field has text, a small
+  caption above it keeps the field's name ("Origin", "Via", "Destination", "New stop").
+- **Removing a via row** (#9, PR #10) uses a red minus (−) instead of ✕, so it can't be confused
+  with the clear button.
+- Field layout, left to right: [text] [ⓧ clear] [⌖ current location] [🕘 recents], then the via
+  row's red minus outside the field.
+
+### Not a change
+- #7, "precip chart doesn't work": works as designed. The chart is hidden unless at least
+  2 stops have a precipitation chance.
