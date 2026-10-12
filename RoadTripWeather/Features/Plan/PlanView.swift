@@ -14,21 +14,24 @@ struct PlanView: View {
     var body: some View {
         Form {
             Section("Route") {
-                LocationField(title: "Origin", text: $coordinator.plan.originText, recents: env.settings.recentLocations)
-                ForEach(coordinator.plan.viaTexts.indices, id: \.self) { i in
+                LocationField(title: "Origin", placeholder: "Origin address or city", text: $coordinator.plan.originText, recents: env.settings.recentLocations, onPick: coordinator.pick)
+                // Rows are found by ID, never by position: a binding to a row
+                // that was just removed crashed the form (issue #2).
+                ForEach(coordinator.plan.viaEntries) { via in
                     HStack {
-                        LocationField(title: "Via", text: $coordinator.plan.viaTexts[i], recents: env.settings.recentLocations)
+                        LocationField(title: "Via", placeholder: "Via-point address or city", text: viaText(via.id), recents: env.settings.recentLocations, onPick: coordinator.pick)
                         Button(role: .destructive) {
-                            coordinator.plan.viaTexts.remove(at: i)
+                            coordinator.plan.viaEntries.removeAll { $0.id == via.id }
                         } label: { Image(systemName: "xmark.circle.fill") }
-                        .buttonStyle(.plain)
+                        .buttonStyle(.borderless)
                         .foregroundStyle(Theme.muted)
+                        .accessibilityLabel("Remove via-point")
                     }
                 }
-                Button { coordinator.plan.viaTexts.append("") } label: {
+                Button { coordinator.plan.viaEntries.append(ViaEntry(text: "")) } label: {
                     Label("Add via-point", systemImage: "plus")
                 }
-                LocationField(title: "Destination", text: $coordinator.plan.destinationText, recents: env.settings.recentLocations)
+                LocationField(title: "Destination", placeholder: "Destination address or city", text: $coordinator.plan.destinationText, recents: env.settings.recentLocations, onPick: coordinator.pick)
             }
 
             Section("Departure") {
@@ -142,6 +145,17 @@ struct PlanView: View {
         }
     }
 
+    private func viaText(_ id: UUID) -> Binding<String> {
+        Binding(
+            get: { coordinator.plan.viaEntries.first { $0.id == id }?.text ?? "" },
+            set: { new in
+                if let i = coordinator.plan.viaEntries.firstIndex(where: { $0.id == id }) {
+                    coordinator.plan.viaEntries[i].text = new
+                }
+            }
+        )
+    }
+
     private var vehicleSelection: Binding<String?> {
         Binding(
             get: { coordinator.plan.vehicleID },
@@ -155,25 +169,105 @@ struct PlanView: View {
     }
 }
 
+/// A place field: free text, address suggestions while typing (issue #4),
+/// "use current location" (issue #3) and recent places. The placeholder says
+/// what to type; once filled, a small caption keeps the field's name (#5).
 struct LocationField: View {
     let title: String
+    let placeholder: String
     @Binding var text: String
     let recents: [String]
+    /// Called with the exact place when the user picks a suggestion or their
+    /// current location; its `query` is the text put in the field.
+    var onPick: (PlacePoint) -> Void = { _ in }
+
+    @State private var completer = AddressCompleter()
+    @State private var locating = false
+    @State private var problem: String?
+    /// Text this field just filled in itself, so it doesn't suggest it back.
+    @State private var filled: String?
+    @FocusState private var focused: Bool
 
     var body: some View {
-        HStack {
-            TextField(title, text: $text)
-                .textInputAutocapitalization(.words)
-                .autocorrectionDisabled()
-            if !recents.isEmpty {
-                Menu {
-                    ForEach(recents, id: \.self) { r in
-                        Button(r) { text = r }
+        VStack(alignment: .leading, spacing: 6) {
+            if !text.isEmpty {
+                Text(title).font(.caption).foregroundStyle(Theme.muted)
+            }
+            HStack {
+                TextField(placeholder, text: $text)
+                    .textInputAutocapitalization(.words)
+                    .autocorrectionDisabled()
+                    .focused($focused)
+                if locating {
+                    ProgressView().controlSize(.small)
+                } else {
+                    Button { Task { await useCurrentLocation() } } label: {
+                        Image(systemName: "scope").foregroundStyle(Theme.muted)
                     }
-                } label: {
-                    Image(systemName: "clock.arrow.circlepath").foregroundStyle(Theme.muted)
+                    .buttonStyle(.borderless)
+                    .accessibilityLabel("Use current location")
+                }
+                if !recents.isEmpty {
+                    Menu {
+                        ForEach(recents, id: \.self) { r in
+                            Button(r) { fill(r) }
+                        }
+                    } label: {
+                        Image(systemName: "clock.arrow.circlepath").foregroundStyle(Theme.muted)
+                    }
                 }
             }
+            if focused {
+                ForEach(completer.suggestions) { suggestion in
+                    Button { Task { await pick(suggestion) } } label: {
+                        VStack(alignment: .leading, spacing: 2) {
+                            Text(suggestion.title).foregroundStyle(.primary)
+                            if !suggestion.subtitle.isEmpty {
+                                Text(suggestion.subtitle).font(.caption).foregroundStyle(Theme.muted)
+                            }
+                        }
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                        .contentShape(Rectangle())
+                    }
+                    .buttonStyle(.borderless)
+                }
+            }
+            if let problem {
+                Text(problem).font(.caption).foregroundStyle(Theme.danger)
+            }
+        }
+        .onChange(of: text) { _, new in
+            problem = nil
+            if focused, new != filled { completer.update(new) } else { completer.clear() }
+        }
+        .onChange(of: focused) { _, isFocused in
+            if !isFocused { completer.clear() }
+        }
+    }
+
+    private func fill(_ value: String) {
+        filled = value
+        focused = false
+        completer.clear()
+        text = value
+    }
+
+    private func pick(_ suggestion: AddressCompleter.Suggestion) async {
+        fill(suggestion.text)
+        // If the lookup fails, Find Routes geocodes the text as usual.
+        if let place = try? await completer.resolve(suggestion) { onPick(place) }
+    }
+
+    private func useCurrentLocation() async {
+        problem = nil
+        locating = true
+        defer { locating = false }
+        do {
+            let place = try await CurrentLocation.place()
+            fill(place.query)
+            onPick(place)
+        } catch {
+            problem = error.localizedDescription
         }
     }
 }
