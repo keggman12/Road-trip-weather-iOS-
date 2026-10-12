@@ -3,7 +3,14 @@
 Changes in user-visible behavior, written so the Android port can match them.
 Each entry names the iOS issue/PR. Platform details are in brackets.
 
-## Unreleased (TestFlight 0.1.0 builds 2–3)
+## Unreleased (TestFlight 0.1.0 builds 2–4)
+
+### Distribution
+- **Build 4 can go to external testers** (TestFlight external groups, after Apple's Beta App
+  Review). Builds 1–3 were uploaded as internal-only and can only go to App Store Connect team
+  members. Build 4 has the same features as build 3; no app behavior changed.
+  *Port note:* the Android equivalent is a Play Console closed or open testing track, not
+  internal testing only.
 
 ### Fixed
 - **Crash when editing or removing a via-point row** (#2, PR #6). The Plan form identified via
