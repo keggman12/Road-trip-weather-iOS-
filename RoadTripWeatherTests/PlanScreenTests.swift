@@ -64,6 +64,38 @@ struct PlanScreenTests {
         #expect(c.env.settings.recentLocations.first == "Dallas", "offline lookups don't touch recents")
     }
 
+    @Test func pickedPlaceIsUsedWithoutGeocodingOrMismatchNotice() async throws {
+        let c = try makeCoordinator()
+        let picked = PlacePoint(query: "Atlantis Casino, Reno, NV", label: "Reno, NV", coordinate: Coordinate(lat: 39.4868, lon: -119.7942), timeZoneID: "America/Los_Angeles")
+        c.pick(picked)
+        c.plan.originText = "Atlantis Casino, Reno, NV"   // the fake geocoder can't find it
+        c.plan.destinationText = "Dallas"
+        await c.findRoutes()
+        #expect(c.errorMessage == nil)
+        #expect(c.plan.origin == picked, "the picked place is used as is")
+        #expect(c.placeNotices.isEmpty, "a picked place never gets a 'check the spelling' notice")
+        #expect(c.plan.departureTimeZoneID == "America/Los_Angeles")
+    }
+
+    @Test func viaRowsKeepTheirIdentityWhenOneIsRemoved() throws {
+        var plan = TripPlan()
+        plan.viaTexts = ["Amarillo", "Wichita Falls", "Raton"]
+        let ids = plan.viaEntries.map(\.id)
+        plan.viaEntries.removeAll { $0.id == ids[1] }
+        #expect(plan.viaTexts == ["Amarillo", "Raton"])
+        #expect(plan.viaEntries.map(\.id) == [ids[0], ids[2]], "rows are not renumbered")
+    }
+
+    @Test func viaPointsKeepTheSavedSessionFormat() throws {
+        var plan = TripPlan()
+        plan.viaTexts = ["Amarillo", "Raton"]
+        let data = try JSONEncoder().encode(plan)
+        let json = try #require(JSONSerialization.jsonObject(with: data) as? [String: Any])
+        #expect(json["viaTexts"] as? [String] == ["Amarillo", "Raton"], "same key and shape as before")
+        let decoded = try JSONDecoder().decode(TripPlan.self, from: data)
+        #expect(decoded.viaTexts == ["Amarillo", "Raton"])
+    }
+
     @Test func findRoutesMakesNoWeatherCallsAndAdoptsOriginZone() async throws {
         let c = try makeCoordinator()
         c.plan.originText = "Denver"

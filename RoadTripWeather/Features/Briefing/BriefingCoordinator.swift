@@ -35,6 +35,10 @@ final class BriefingCoordinator {
     var weatherAttributionURL: URL?
     /// Places that resolved to a different name than was typed.
     var placeNotices: [String] = []
+    /// Exact places the user picked (a suggestion or current location), by
+    /// the text put in the field. Find Routes uses these instead of geocoding
+    /// that text again.
+    var pickedPlaces: [String: PlacePoint] = [:]
     /// StopPlanner candidates per route index (cleared with the routes).
     var candidateCache: [Int: [StopPlanner.Candidate]] = [:]
     /// The saved trip the current plan came from, if any.
@@ -82,6 +86,10 @@ final class BriefingCoordinator {
             let texts = [originText] + plan.viaTexts.map { $0.trimmingCharacters(in: .whitespaces) }.filter { !$0.isEmpty } + [destText]
             var points: [PlacePoint] = []
             for t in texts {
+                if let picked = pickedPlaces[t] {
+                    points.append(picked)
+                    continue
+                }
                 env.status.countCall(.mapkit)
                 points.append(try await env.geocoding.geocode(t))
             }
@@ -90,7 +98,7 @@ final class BriefingCoordinator {
             // creates a new trip instead of overwriting the old one.
             if let trip = loadedTrip, !Self.matches(trip, texts: texts) { loadedTrip = nil }
             placeNotices = zip(texts, points).compactMap { query, place in
-                PlaceMatch.isLikelyMismatch(query: query, label: place.label) ? PlaceMatch.notice(query: query, label: place.label) : nil
+                pickedPlaces[query] == nil && PlaceMatch.isLikelyMismatch(query: query, label: place.label) ? PlaceMatch.notice(query: query, label: place.label) : nil
             }
             plan.origin = first
             plan.destination = last
@@ -112,6 +120,11 @@ final class BriefingCoordinator {
             errorMessage = error.localizedDescription
         }
         phase = .idle
+    }
+
+    /// Remembers a place the user picked; its `query` is the field's new text.
+    func pick(_ place: PlacePoint) {
+        pickedPlaces[place.query.trimmingCharacters(in: .whitespaces)] = place
     }
 
     func selectRoute(_ index: Int) {

@@ -22,8 +22,14 @@ struct MapKitGeocodingService: GeocodingService {
         request.resultTypes = [.address, .pointOfInterest]
         let response = try await MKLocalSearch(request: request).start()
         guard let item = response.mapItems.first else { throw ServiceError.notFound(query) }
+        return PlacePoint(item, query: query)
+    }
+}
+
+extension PlacePoint {
+    /// A place from a MapKit result, labelled "Name, City, ST".
+    init(_ item: MKMapItem, query: String) {
         let placemark = item.placemark
-        let coordinate = Coordinate(placemark.coordinate)
         let parts = [item.name, placemark.locality, placemark.administrativeArea]
             .compactMap { $0 }
             .filter { !$0.isEmpty }
@@ -32,7 +38,7 @@ struct MapKitGeocodingService: GeocodingService {
             // "Amarillo, Amarillo, TX" → "Amarillo, TX"
             label = [locality, placemark.administrativeArea].compactMap { $0 }.joined(separator: ", ")
         }
-        return PlacePoint(query: query, label: label, coordinate: coordinate, timeZoneID: item.timeZone?.identifier)
+        self.init(query: query, label: label, coordinate: Coordinate(placemark.coordinate), timeZoneID: item.timeZone?.identifier)
     }
 }
 
