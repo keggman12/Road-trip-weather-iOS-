@@ -70,6 +70,17 @@ struct ManualStopTests {
         #expect(c.statusMessage == "Added “Amarillo, TX, USA” (~\(Int(off.rounded())) mi off route).")
     }
 
+    @Test func pickedPlaceIsAddedWithoutGeocoding() async throws {
+        let c = try await briefed(routeThrough: Self.amarillo)
+        let query = "Cadillac Ranch, Amarillo, TX"     // the fake geocoder can't find it
+        c.pick(PlacePoint(query: query, label: "Cadillac Ranch, Amarillo, TX", coordinate: Self.amarillo))
+        #expect(await c.addStop(named: query))
+        let added = try #require(c.briefing?.stops.first { $0.kind == .manual })
+        #expect(added.label == "Cadillac Ranch, Amarillo, TX")
+        #expect(c.errorMessage == nil)
+        #expect(c.env.settings.recentLocations.first == query)
+    }
+
     @Test func unknownPlaceChangesNothing() async throws {
         let c = try await briefed()
         let before = try #require(c.briefing)

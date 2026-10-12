@@ -20,11 +20,12 @@ struct PlanView: View {
                 ForEach(coordinator.plan.viaEntries) { via in
                     HStack {
                         LocationField(title: "Via", placeholder: "Via-point address or city", text: viaText(via.id), recents: env.settings.recentLocations, onPick: coordinator.pick)
+                        // A minus, not an ✕: the ✕ inside the field clears it (#9).
                         Button(role: .destructive) {
                             coordinator.plan.viaEntries.removeAll { $0.id == via.id }
-                        } label: { Image(systemName: "xmark.circle.fill") }
+                        } label: { Image(systemName: "minus.circle.fill") }
                         .buttonStyle(.borderless)
-                        .foregroundStyle(Theme.muted)
+                        .foregroundStyle(Theme.danger)
                         .accessibilityLabel("Remove via-point")
                     }
                 }
@@ -170,8 +171,9 @@ struct PlanView: View {
 }
 
 /// A place field: free text, address suggestions while typing (issue #4),
-/// "use current location" (issue #3) and recent places. The placeholder says
-/// what to type; once filled, a small caption keeps the field's name (#5).
+/// "use current location" (issue #3), recent places and a clear button (#9).
+/// The placeholder says what to type; once filled, a small caption keeps the
+/// field's name (#5). Used on the Plan screen and for adding a stop (#8).
 struct LocationField: View {
     let title: String
     let placeholder: String
@@ -180,6 +182,8 @@ struct LocationField: View {
     /// Called with the exact place when the user picks a suggestion or their
     /// current location; its `query` is the text put in the field.
     var onPick: (PlacePoint) -> Void = { _ in }
+    /// Return key action; when set, the key reads "Done".
+    var onSubmit: (() -> Void)?
 
     @State private var completer = AddressCompleter()
     @State private var locating = false
@@ -198,6 +202,19 @@ struct LocationField: View {
                     .textInputAutocapitalization(.words)
                     .autocorrectionDisabled()
                     .focused($focused)
+                    .submitLabel(onSubmit == nil ? .return : .done)
+                    .onSubmit { onSubmit?() }
+                if !text.isEmpty {
+                    Button {
+                        filled = nil
+                        text = ""
+                        focused = true
+                    } label: {
+                        Image(systemName: "xmark.circle.fill").foregroundStyle(Theme.muted)
+                    }
+                    .buttonStyle(.borderless)
+                    .accessibilityLabel("Clear \(title)")
+                }
                 if locating {
                     ProgressView().controlSize(.small)
                 } else {
