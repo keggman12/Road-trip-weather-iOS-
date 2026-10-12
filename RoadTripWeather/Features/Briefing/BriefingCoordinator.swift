@@ -475,19 +475,23 @@ final class BriefingCoordinator {
         guard !query.isEmpty else { return false }
         guard briefing != nil else { errorMessage = "Generate a briefing first."; return false }
         errorMessage = nil
-        phase = .geocoding(query)
-        env.status.countCall(.mapkit)
         let place: PlacePoint
-        do {
-            place = try await env.geocoding.geocode(query)
-            env.status.recordSuccess(.mapkit, count: 1)
-        } catch {
-            env.status.recordError(.mapkit, error.localizedDescription)
-            errorMessage = error.localizedDescription
+        if let picked = pickedPlaces[query] {
+            place = picked
+        } else {
+            phase = .geocoding(query)
+            env.status.countCall(.mapkit)
+            do {
+                place = try await env.geocoding.geocode(query)
+                env.status.recordSuccess(.mapkit, count: 1)
+            } catch {
+                env.status.recordError(.mapkit, error.localizedDescription)
+                errorMessage = error.localizedDescription
+                phase = .idle
+                return false
+            }
             phase = .idle
-            return false
         }
-        phase = .idle
         guard await addStop(ManualStopEdit(coordinate: place.coordinate, label: place.label)) else { return false }
         env.settings.remember(query)
         return true

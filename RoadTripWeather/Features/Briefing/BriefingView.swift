@@ -101,7 +101,7 @@ struct BriefingView: View {
                 if let plan = StopPlanner.summary(for: briefing.stops, rangeMi: briefing.rangeMi) {
                     Label(plan, systemImage: "fuelpump").font(.caption).foregroundStyle(Theme.muted)
                 }
-                AddStopField(text: $newStopText, busy: coordinator.isBusy) {
+                AddStopField(text: $newStopText, busy: coordinator.isBusy, recents: env.settings.recentLocations, onPick: coordinator.pick) {
                     Task { if await coordinator.addStop(named: newStopText) { newStopText = "" } }
                 }
                 ForEach(Array(briefing.stops.enumerated()), id: \.element.id) { i, stop in
@@ -130,22 +130,23 @@ struct BriefingView: View {
     }
 }
 
-/// Web `manualStopInput`: type a place, it's snapped onto the route.
+/// Web `manualStopInput`: type a place, it's snapped onto the route. The
+/// field is the Plan screen's `LocationField` — suggestions, current
+/// location, recents and clear (issues #8, #9).
 struct AddStopField: View {
     @Binding var text: String
     let busy: Bool
+    let recents: [String]
+    let onPick: (PlacePoint) -> Void
     let add: () -> Void
 
     var body: some View {
-        HStack {
-            TextField("Add a stop (city, address, place)", text: $text)
-                .textInputAutocapitalization(.words)
-                .autocorrectionDisabled()
-                .submitLabel(.done)
-                .onSubmit(add)
+        HStack(alignment: .center) {
+            LocationField(title: "New stop", placeholder: "Add a stop (address, city or place)", text: $text, recents: recents, onPick: onPick, onSubmit: add)
             Button(action: add) {
                 if busy { ProgressView().controlSize(.small) } else { Image(systemName: "plus.circle.fill").font(.title3) }
             }
+            .buttonStyle(.borderless)
             .disabled(busy || text.trimmingCharacters(in: .whitespaces).isEmpty)
             .accessibilityLabel("Add stop")
         }
