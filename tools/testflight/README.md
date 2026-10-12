@@ -13,4 +13,6 @@ xcodebuild -exportArchive -archivePath build/RoadTripWeather.xcarchive \
   -allowProvisioningUpdates
 ```
 
-`ExportOptions.plist` uploads straight to App Store Connect (internal TestFlight only).
+`ExportOptions.plist` uploads straight to App Store Connect. Builds can go to internal and
+external testers (`testFlightInternalTestingOnly` is `false` from build 4). A build uploaded as
+internal-only can never be added to an external group.
