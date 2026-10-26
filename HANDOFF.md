@@ -101,6 +101,10 @@ xcodebuild -project RoadTripWeather.xcodeproj -scheme RoadTripWeather \
   sides of the trip, ≤ 35 % detour, ≥ 25 mi from existing routes; each is geocoded by name and
   routed origin → hub → destination (ignores the user's vias), deduped, max 6 routes,
   labelled "Suggested · via Woodward, OK". ~3 MapKit calls per hub, only on tap.
+- **Via-points are briefed as stops** (owner decision 2026-10-26): every via, typed or dropped
+  as a pin (long-press the Routes map), becomes a VIA stop with its own forecast at the via's own
+  coordinate, dwell 0, on the routes chained through it (not Direct/alternates/suggestions). It
+  is removed with its via-point, not from the card.
 - Geocoded places whose name differs from what was typed are flagged (e.g. "Rotan, New Mexico"
   → Raton, NM). A new search detaches from the loaded saved trip; default names include vias.
 
