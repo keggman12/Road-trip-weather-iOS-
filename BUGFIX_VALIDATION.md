@@ -39,3 +39,14 @@ xcodebuild test -project RoadTripWeather.xcodeproj -scheme RoadTripWeather \
 7. Enable the weekly POI setting and bring the app to the foreground. Data Sources shows refresh attempts/results. Returning to the app again within a week should not repeat an automatic attempt; Refresh now still works manually. The app must be opened/active for the automatic check.
 
 No project regeneration, commit, push, archive or TestFlight upload is required to try these changes. Existing cached stops whose original address coordinates were already discarded cannot recover that address automatically; re-add such a stop to get the correct destination.
+
+
+## iPhone crash follow-up — 2026-10-26
+
+Three on-device crash reports showed `DateInterval.init(start:end:)` trapping inside `WeatherKitService.forecast(at:for:)`. An ETA more than three hours in the past made the clamped start (`now`) later than the requested end (`ETA + 3 hours`). WeatherKit traps before it can throw, so `try?` cannot recover.
+
+The adapter now validates a nonempty interval before constructing the WeatherKit query. Expired windows return `.failed`, preserving existing cache through the normal failure path. Valid windows retain their original end and are clipped at the present; far-future requests remain `.beyondHorizon`. Tests cover expired dates, the exact three-hour boundary, partially elapsed windows, future windows, and direct service calls that must return without reaching WeatherKit.
+
+For a new trip, choose a current or future departure in Plan. Saved trips keep the user's selected date; the app does not silently change it.
+
+Verified after the crash fix: 73 deterministic app tests and 115 core tests passed; the signed build installed and launched on the physical iPhone. The user confirmed the previous crash became an unavailable-weather result, and their screenshot showed October 17 ETAs on October 26. Stop cards now explain expired dates with a PAST badge, and Plan warns about past departures.

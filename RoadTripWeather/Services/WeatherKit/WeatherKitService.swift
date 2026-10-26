@@ -18,12 +18,15 @@ struct WeatherKitService: RoadTripWeather.WeatherService {   // our protocol, no
         if eta.timeIntervalSince(now) > WeatherKitService.horizon {
             return ForecastResult(snapshot: nil, horizon: .beyondHorizon)
         }
+        // A restored trip can have past ETAs. WeatherKit constructs a DateInterval
+        // internally and traps (rather than throws) if end precedes start.
+        guard let interval = Self.hourlyRequestInterval(for: eta, now: now) else {
+            return ForecastResult(snapshot: nil, horizon: .failed)
+        }
         let location = CLLocation(latitude: coordinate.latitude, longitude: coordinate.longitude)
-        let start = max(now, eta.addingTimeInterval(-WeatherKitService.hourlyWindow))
-        let end = eta.addingTimeInterval(WeatherKitService.hourlyWindow)
         let (hourly, daily) = try await WeatherKit.WeatherService.shared.weather(
             for: location,
-            including: .hourly(startDate: start, endDate: end), .daily
+            including: .hourly(startDate: interval.start, endDate: interval.end), .daily
         )
         let fetchedAt = Date()
 
@@ -34,6 +37,17 @@ struct WeatherKitService: RoadTripWeather.WeatherService {   // our protocol, no
             return ForecastResult(snapshot: snapshot(from: day, fetchedAt: fetchedAt), horizon: .ok)
         }
         return ForecastResult(snapshot: nil, horizon: .beyondHorizon)
+    }
+
+    /// Only request nonempty forecast windows that still overlap the present.
+    /// Do not substitute today's weather for an expired arrival time.
+    static func hourlyRequestInterval(for eta: Date, now: Date) -> DateInterval? {
+        guard eta.timeIntervalSinceReferenceDate.isFinite,
+              now.timeIntervalSinceReferenceDate.isFinite else { return nil }
+        let start = max(now, eta.addingTimeInterval(-hourlyWindow))
+        let end = eta.addingTimeInterval(hourlyWindow)
+        guard end > start else { return nil }
+        return DateInterval(start: start, end: end)
     }
 
     func attributionURL() async -> URL? {

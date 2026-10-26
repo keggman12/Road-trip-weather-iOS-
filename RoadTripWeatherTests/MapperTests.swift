@@ -71,3 +71,43 @@ struct ConditionMappingTests {
         #expect(WeatherKitService.category(for: .windy, cloudPercent: 70) == .mostlyCloudy)
     }
 }
+
+@Suite("WeatherKit request dates")
+struct WeatherKitRequestDateTests {
+    let now = Date(timeIntervalSince1970: 1_792_000_000)
+
+    @Test func expiredAndEmptyWindowsAreRejected() {
+        // These used to pass start > end (or start == end) into WeatherKit.
+        let offsets: [TimeInterval] = [-30 * 24 * 3600, -24 * 3600, -3 * 3600 - 1, -3 * 3600]
+        for offset in offsets {
+            #expect(WeatherKitService.hourlyRequestInterval(for: now.addingTimeInterval(offset), now: now) == nil)
+        }
+    }
+
+    @Test func validWindowsAreClippedToNowWithoutChangingTheirEnd() throws {
+        let offsets: [TimeInterval] = [-3 * 3600 + 1, -3600, 0, 3600, 24 * 3600]
+        for offset in offsets {
+            let eta = now.addingTimeInterval(offset)
+            let interval = try #require(WeatherKitService.hourlyRequestInterval(for: eta, now: now))
+            #expect(interval.start >= now)
+            #expect(interval.end > interval.start)
+            #expect(interval.end == eta.addingTimeInterval(3 * 3600))
+        }
+    }
+
+    @Test func pastArrivalReturnsFailureWithoutCallingWeatherKit() async throws {
+        let result = try await WeatherKitService().forecast(
+            at: Coordinate(lat: 39.7392, lon: -104.9903),
+            for: Date().addingTimeInterval(-24 * 3600))
+        #expect(result.horizon == .failed)
+        #expect(result.snapshot == nil)
+    }
+
+    @Test func beyondHorizonRemainsDistinctFromExpiredArrival() async throws {
+        let result = try await WeatherKitService().forecast(
+            at: Coordinate(lat: 39.7392, lon: -104.9903),
+            for: Date().addingTimeInterval(30 * 24 * 3600))
+        #expect(result.horizon == .beyondHorizon)
+        #expect(result.snapshot == nil)
+    }
+}

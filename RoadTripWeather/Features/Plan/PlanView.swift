@@ -38,6 +38,10 @@ struct PlanView: View {
             Section("Departure") {
                 DatePicker("Depart", selection: $coordinator.plan.departure, displayedComponents: [.date, .hourAndMinute])
                     .environment(\.timeZone, coordinator.plan.departureTimeZone)
+                if coordinator.plan.departure < Date() {
+                    Text("This departure is in the past. Change it for a new trip.")
+                        .font(.caption).foregroundStyle(Theme.warn)
+                }
                 if let id = coordinator.plan.departureTimeZoneID {
                     Text("Times in \(id) (origin)").font(.caption).foregroundStyle(Theme.muted)
                 }

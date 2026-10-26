@@ -15,6 +15,14 @@ struct StopCardView: View {
     let onOvernight: (Bool) -> Void
     let onRemove: () -> Void
 
+    private var forecastWindowExpired: Bool {
+        stop.eta.addingTimeInterval(WeatherKitService.hourlyWindow) <= Date()
+    }
+    private var unavailableForecastText: String {
+        if forecastWindowExpired { return "Arrival time is in the past. Change the departure date in Plan for a new forecast." }
+        return stop.horizon == .beyondHorizon ? "Beyond the 10-day forecast horizon" : "Weather fetch failed"
+    }
+
     private var isInterior: Bool { index > 0 && index < total - 1 }
     /// " · 0.4 mi off route" (or " · on route").
     private var offRouteText: String {
@@ -35,7 +43,7 @@ struct StopCardView: View {
                 if let w = stop.weather {
                     Text("\(w.temperatureF)°").font(.title3.monospacedDigit().weight(.bold)).foregroundStyle(tempColor)
                 } else {
-                    Text(stop.horizon == .beyondHorizon ? "—" : "ERR").font(.caption.weight(.bold)).foregroundStyle(Theme.danger)
+                    Text(forecastWindowExpired ? "PAST" : (stop.horizon == .beyondHorizon ? "—" : "ERR")).font(.caption.weight(.bold)).foregroundStyle(Theme.danger)
                 }
                 if NavigationLinks.isNavigable(stopIndex: index) { NavigateMenu(stop: stop) }
             }
@@ -77,7 +85,7 @@ struct StopCardView: View {
             if let w = stop.weather {
                 FlowRow(items: metaChips(w), color: Theme.muted)
             } else {
-                Text(stop.horizon == .beyondHorizon ? "Beyond the 10-day forecast horizon" : "Weather fetch failed")
+                Text(unavailableForecastText)
                     .font(.caption).foregroundStyle(Theme.danger)
             }
 
