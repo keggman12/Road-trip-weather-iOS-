@@ -71,6 +71,7 @@ final class POIStore: POIService {
         guard refreshingKinds.insert(kind).inserted else { throw ServiceError.unavailable("POI refresh already running") }
         defer { refreshingKinds.remove(kind) }
         let meta = metaRecord(for: kind)
+        let previousAttempt = meta.lastAttemptAt
         meta.lastAttemptAt = Date()
         statusStore.countCall(DataSource(kind))
         do {
@@ -84,6 +85,13 @@ final class POIStore: POIService {
             try? context.save()
             return POIRefreshOutcome(kind: kind, count: stored ?? fetched.pois.count, source: fetched.source)
         } catch {
+            if Task.isCancelled || error is CancellationError || (error as? URLError)?.code == .cancelled {
+                // Interrupted (the app left the foreground), not failed: the
+                // kind stays due instead of waiting out the weekly throttle.
+                meta.lastAttemptAt = previousAttempt
+                try? context.save()
+                throw error
+            }
             if let both = error as? POIRefreshService.BothSourcesFailed {
                 statusStore.countCall(.overpass)
                 statusStore.recordError(.overpass, both.overpassError)

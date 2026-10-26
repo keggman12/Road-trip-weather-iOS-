@@ -38,13 +38,13 @@ struct NWSAlertServiceTests {
             ("urn:ended-1h", eta.addingTimeInterval(-6 * 3600), eta.addingTimeInterval(-1 * 3600)),
         ]))])
         let alerts = await makeService().alerts(at: point, eta: eta)
-        #expect(alerts.map(\.id) == ["urn:ended-1h"])
+        #expect(alerts?.map(\.id) == ["urn:ended-1h"])
     }
 
     @Test func rateLimitIsRetried() async {
         StubURLProtocol.respond([.status(429), .status(503), .json(Self.body([("urn:a", nil, nil)]))])
         let alerts = await makeService().alerts(at: point, eta: eta)
-        #expect(alerts.map(\.id) == ["urn:a"])
+        #expect(alerts?.map(\.id) == ["urn:a"])
         #expect(StubURLProtocol.requests.count == 3)
     }
 
@@ -52,7 +52,7 @@ struct NWSAlertServiceTests {
         StubURLProtocol.respond([.status(503), .status(503), .status(503), .status(503)])
         let sink = ResultRecorder()
         let alerts = await makeService(sink: sink.record).alerts(at: point, eta: eta)
-        #expect(alerts.isEmpty)
+        #expect(alerts == nil, "a failed lookup is not \"no alerts\"")
         #expect(StubURLProtocol.requests.count == 3)
         #expect(sink.failures == 1)
     }
@@ -60,15 +60,15 @@ struct NWSAlertServiceTests {
     @Test func clientErrorIsNotRetried() async {
         StubURLProtocol.respond([.status(404), .json(Self.body([("urn:a", nil, nil)]))])
         let alerts = await makeService().alerts(at: point, eta: eta)
-        #expect(alerts.isEmpty)
+        #expect(alerts == nil, "a failed lookup is not \"no alerts\"")
         #expect(StubURLProtocol.requests.count == 1)
     }
 
-    @Test func offlineYieldsEmptyWithoutRetry() async {
+    @Test func offlineYieldsNilWithoutRetry() async {
         StubURLProtocol.respond([.error(URLError(.notConnectedToInternet)), .json(Self.body([("urn:a", nil, nil)]))])
         let sink = ResultRecorder()
         let alerts = await makeService(sink: sink.record).alerts(at: point, eta: eta)
-        #expect(alerts.isEmpty)
+        #expect(alerts == nil, "a failed lookup is not \"no alerts\"")
         #expect(StubURLProtocol.requests.count == 1)
         #expect(sink.failures == 1)
     }
@@ -77,7 +77,7 @@ struct NWSAlertServiceTests {
         StubURLProtocol.respond([.error(URLError(.timedOut)), .json(Self.body([("urn:a", nil, nil)]))])
         let sink = ResultRecorder()
         let alerts = await makeService(sink: sink.record).alerts(at: point, eta: eta)
-        #expect(alerts.map(\.id) == ["urn:a"])
+        #expect(alerts?.map(\.id) == ["urn:a"])
         #expect(sink.successes == [1])
     }
 

@@ -142,6 +142,21 @@ struct SettingsDataSourcesTests {
         #expect(env.pois.isDueForAutoRefresh(kind: .bucees, now: Date().addingTimeInterval(8 * 24 * 3600)))
     }
 
+    @Test func cancelledAutomaticRefreshStaysDue() async throws {
+        let session = RefreshStub.session()
+        RefreshStub.handler = { _ in (503, Data()) }
+        let refresher = POIRefreshService(appVersion: "test", session: session, overpass: OverpassClient(appVersion: "test", session: session, timeout: 5))
+        let env = try makeEnv(refresher: refresher)
+        await env.pois.importBundledSnapshotIfNeeded()
+        // Leaving the foreground cancels the scene task mid-refresh: the
+        // fetch throws on the cancelled task after the attempt was stamped.
+        let task = Task { try await env.pois.refresh(kind: .bucees) }
+        task.cancel()
+        _ = try? await task.value
+        #expect(env.pois.meta(for: .bucees)?.lastAttemptAt == nil)
+        #expect(env.pois.isDueForAutoRefresh(kind: .bucees))
+    }
+
     @Test func rowWording() {
         let none = DataSourcesView.summary(for: .openChargeMap, status: nil, calls: 0, ocmKeyStored: false)
         #expect(none.state == "disabled — add a key in Settings")

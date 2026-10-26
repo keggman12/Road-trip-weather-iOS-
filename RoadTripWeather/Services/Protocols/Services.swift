@@ -70,9 +70,10 @@ protocol WeatherService: Sendable {
 }
 
 /// Alerts in effect around an ETA (web `api.getAlertsAt`). Best-effort:
-/// never throws, returns [] on failure.
+/// never throws; nil on failure, so a refresh keeps cached alerts instead
+/// of reading "no alerts".
 protocol AlertService: Sendable {
-    func alerts(at coordinate: Coordinate, eta: Date) async -> [WeatherAlert]
+    func alerts(at coordinate: Coordinate, eta: Date) async -> [WeatherAlert]?
 }
 
 struct POIRefreshOutcome: Sendable {

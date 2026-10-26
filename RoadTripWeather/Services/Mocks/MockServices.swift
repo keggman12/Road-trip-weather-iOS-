@@ -92,7 +92,7 @@ struct MockWeatherService: WeatherService {
 }
 
 struct MockAlertService: AlertService {
-    func alerts(at coordinate: Coordinate, eta: Date) async -> [WeatherAlert] {
+    func alerts(at coordinate: Coordinate, eta: Date) async -> [WeatherAlert]? {
         // One alert band across the Texas panhandle.
         guard (34.5...36.5).contains(coordinate.lat), (-103.0 ... -100.0).contains(coordinate.lon) else { return [] }
         return [WeatherAlert(

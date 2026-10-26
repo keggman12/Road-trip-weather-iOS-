@@ -78,14 +78,16 @@ struct WeatherKitRequestDateTests {
 
     @Test func expiredAndEmptyWindowsAreRejected() {
         // These used to pass start > end (or start == end) into WeatherKit.
-        let offsets: [TimeInterval] = [-30 * 24 * 3600, -24 * 3600, -3 * 3600 - 1, -3 * 3600]
+        let offsets: [TimeInterval] = [-30 * 24 * 3600, -24 * 3600, -3 * 3600 - 1, -3 * 3600, -3 * 3600 + 1, -3600 - 1]
         for offset in offsets {
             #expect(WeatherKitService.hourlyRequestInterval(for: now.addingTimeInterval(offset), now: now) == nil)
         }
     }
 
     @Test func validWindowsAreClippedToNowWithoutChangingTheirEnd() throws {
-        let offsets: [TimeInterval] = [-3 * 3600 + 1, -3600, 0, 3600, 24 * 3600]
+        // Up to an hour past, the current hour still stands for the ETA;
+        // older arrivals would get today's weather, so they are rejected above.
+        let offsets: [TimeInterval] = [-3600, -60, 0, 3600, 24 * 3600]
         for offset in offsets {
             let eta = now.addingTimeInterval(offset)
             let interval = try #require(WeatherKitService.hourlyRequestInterval(for: eta, now: now))
