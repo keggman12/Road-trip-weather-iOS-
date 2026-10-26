@@ -12,6 +12,9 @@ struct WeatherKitService: RoadTripWeather.WeatherService {   // our protocol, no
     static let horizon: TimeInterval = 240 * 3600
     /// Half-width of the hourly window requested around the ETA.
     static let hourlyWindow: TimeInterval = 3 * 3600
+    /// How long after an ETA the current hour still stands for it. Older
+    /// arrivals would get the current hour's weather, so they fail instead.
+    static let pastTolerance: TimeInterval = 3600
 
     func forecast(at coordinate: Coordinate, for eta: Date) async throws -> ForecastResult {
         let now = Date()
@@ -43,7 +46,8 @@ struct WeatherKitService: RoadTripWeather.WeatherService {   // our protocol, no
     /// Do not substitute today's weather for an expired arrival time.
     static func hourlyRequestInterval(for eta: Date, now: Date) -> DateInterval? {
         guard eta.timeIntervalSinceReferenceDate.isFinite,
-              now.timeIntervalSinceReferenceDate.isFinite else { return nil }
+              now.timeIntervalSinceReferenceDate.isFinite,
+              eta >= now.addingTimeInterval(-pastTolerance) else { return nil }
         let start = max(now, eta.addingTimeInterval(-hourlyWindow))
         let end = eta.addingTimeInterval(hourlyWindow)
         guard end > start else { return nil }
