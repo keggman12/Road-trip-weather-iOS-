@@ -86,6 +86,29 @@ struct ViaPinTests {
         #expect(!c.routes.contains { $0.label?.hasPrefix("via ") == true })
     }
 
+    @Test func aPinIsBriefedAsAStopWithItsOwnForecast() async throws {
+        let c = try coordinator()
+        await c.findRoutes()
+        await c.addViaPin(at: PinSpots.nearPueblo)
+        try #require(c.routes.first?.label == "via Pin near Pueblo")
+        c.selectRoute(0)
+        await c.generateBriefing(allRoutes: true)
+        let via = try #require(c.briefings[0]?.stops.first { $0.kind == .via })
+        #expect(via.label == "Pin near Pueblo, CO")
+        #expect(via.coordinate == DroppedPin.coordinate(fromQuery: DroppedPin.query(for: PinSpots.nearPueblo)))
+        #expect(via.weather != nil && via.forecastFor == via.eta)
+        #expect(via.dwellMinutes == 0, "passing through adds no time")
+        let stops = try #require(c.briefings[0]?.stops)
+        #expect(stops.first?.kind == .origin && stops.last?.kind == .destination)
+        #expect(zip(stops, stops.dropFirst()).allSatisfy { $0.eta <= $1.eta })
+        // The direct route doesn't go through the pin.
+        let direct = try #require(c.routes.firstIndex { $0.label == "Direct" })
+        #expect(c.briefings[direct]?.stops.contains { $0.kind == .via } == false)
+        // Removing it on the card is not offered; removing the pin drops it.
+        c.removeStop(stopID: via.id)
+        #expect(c.briefings[0]?.stops.contains { $0.id == via.id } == true)
+    }
+
     @Test func droppingTheSameSpotTwiceAddsOnePin() async throws {
         let c = try coordinator()
         await c.findRoutes()

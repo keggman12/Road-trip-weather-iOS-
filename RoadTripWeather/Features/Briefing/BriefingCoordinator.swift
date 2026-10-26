@@ -335,13 +335,16 @@ final class BriefingCoordinator {
     /// (optimizer candidates); `progress` replaces the briefing phase updates.
     func brief(routeIndex j: Int, label: String, departure: Date? = nil, withChargers: Bool = false, progress: ((Int, Int) -> Void)? = nil) async -> Briefing? {
         let route = routes[j]
-        let (stops0, totalMi) = StopPlanner.plan(
+        let (planned, totalMi) = StopPlanner.plan(
             route: route,
             rangeMi: plan.rangeMi,
             candidates: await stopCandidates(routeIndex: j),
             originLabel: plan.origin?.label ?? plan.originText,
             destinationLabel: plan.destination?.label ?? plan.destinationText
         )
+        // Every via (typed or pinned) is briefed as a stop on the routes
+        // that go through it.
+        let stops0 = ViaStops.inserting(ViaStops.stops(for: plan.vias, on: route), into: planned)
         var b = Briefing(
             routeIndex: j,
             routeLabel: route.label,

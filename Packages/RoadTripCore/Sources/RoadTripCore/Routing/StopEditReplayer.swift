@@ -65,7 +65,7 @@ public enum StopEditReplayer {
         var out: [Stop.ID] = []
         let interior = stops.dropFirst().dropLast()
         for mi in removedMi {
-            if let s = interior.first(where: { !$0.kind.isUserAdded && !taken.contains($0.id) && abs($0.distanceMi - Double(mi)) <= toleranceMi }) {
+            if let s = interior.first(where: { !$0.kind.isUserAdded && $0.kind != .via && !taken.contains($0.id) && abs($0.distanceMi - Double(mi)) <= toleranceMi }) {
                 taken.insert(s.id)
                 out.append(s.id)
             }
@@ -78,6 +78,7 @@ public enum StopEditReplayer {
     @discardableResult
     public static func remove(stopID: Stop.ID, from briefing: inout Briefing) -> Bool {
         guard let idx = briefing.stops.firstIndex(where: { $0.id == stopID }) else { return false }
+        guard briefing.stops[idx].kind != .via else { return false }
         let stop = briefing.stops.remove(at: idx)
         if !stop.kind.isUserAdded {
             briefing.removedMi.append(Int(stop.distanceMi.rounded()))
