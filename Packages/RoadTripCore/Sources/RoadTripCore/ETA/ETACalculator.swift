@@ -8,6 +8,7 @@ import Foundation
 /// own zone (`Stop.timeZoneID`, falling back to `fallbackTimeZone`), which is
 /// what "resume at 8 in the morning" means to someone who slept there.
 public enum ETACalculator {
+    public static let minimumRestHours: Double = 6
     /// Recomputes `eta`, `legMi`, `autoOvernight`/`resume` for every stop in
     /// place. Stops are sorted by `distanceMi` first. Returns the final arrival.
     @discardableResult
@@ -58,12 +59,17 @@ public enum ETACalculator {
         return t
     }
 
-    /// The next calendar day's `time`, strictly after `date`, in `timeZone`
-    /// (web `nextResumeEpoch`: tomorrow at HH:mm, then step forward by a day
-    /// while not after `t`).
+    /// Before the local resume time, resume this morning after at least six
+    /// elapsed hours of rest. Otherwise resume at that time the next day.
+    /// Matches Android, including the stop's time zone and DST transitions.
     public static func nextResume(after date: Date, at time: TimeOfDay, in timeZone: TimeZone, calendar base: Calendar = Calendar(identifier: .gregorian)) -> Date {
         var cal = base
         cal.timeZone = timeZone
+        let local = cal.dateComponents([.hour, .minute], from: date)
+        if (local.hour ?? 0) * 60 + (local.minute ?? 0) < time.hour * 60 + time.minute,
+           let morning = cal.date(bySettingHour: time.hour, minute: time.minute, second: 0, of: date) {
+            return max(morning, date.addingTimeInterval(minimumRestHours * 3600))
+        }
         guard let tomorrow = cal.date(byAdding: .day, value: 1, to: date) else {
             return date.addingTimeInterval(86_400)
         }

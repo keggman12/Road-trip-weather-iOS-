@@ -158,3 +158,18 @@ Open:
 - Never ship fabricated POI data; regenerate the snapshot only with `tools/poi-snapshot`.
 - Be polite to third parties: NWS/Overpass identified by User-Agent, Overpass serialized with
   30 s cooldown on 429/406, brand refresh manual + at most weekly.
+
+
+## Local bugfix validation — 2026-10-26
+
+Branch `codex/bugfix-weather-itinerary`. Resolved forecast cache/failure reporting, missing-weather rankings and alert scoring, manual destination coordinates, Android-parity same-morning rest, foreground weekly POI refresh, and edited-itinerary reuse for regeneration/optimization. See `BUGFIX_VALIDATION.md` for behavior, exact checks and Xcode steps. Swift core: 115 passed. Deterministic iOS simulator: 69 app + 115 core passed. Full live-provider run failed only the existing Raton/eastern-alternate MapKit test (two assertions); routing was unchanged. Real-device WeatherKit/navigation and foreground POI checks remain manual.
+
+
+### Physical iPhone crash follow-up
+
+On-device crash reports identified a WeatherKit `DateInterval(start:end:)` trap for expired ETAs. The request adapter now rejects empty/reversed windows before calling WeatherKit. Four regressions cover expired/boundary/current/future dates and the no-network service paths. Deterministic simulator suite: 73 app + 115 core passed. Signed fix installed and launched on the physical iPhone; user screenshot confirmed briefing remained open with October 17 ETAs on October 26. Added explicit past-date warnings on Plan and stop cards.
+
+
+### Departure safeguards follow-up
+
+Plan now prevents past new departure selections/searches and offers explicit Depart today/tomorrow for old trips without silently changing saved dates. Explicit changes retime edited drafts; refresh/regeneration fetch upcoming stops only and retain elapsed cache. Deterministic simulator: 76 app + 115 core tests passed. Signed app installed on iPhone; automatic launch blocked by locked device. Unlock and tap the app to test. See BUGFIX_VALIDATION.md.

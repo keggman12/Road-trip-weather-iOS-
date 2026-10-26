@@ -34,13 +34,11 @@ struct TripPlan: Hashable, Codable, Sendable {
     }
 
     /// Web `defaultDeparture`: next full hour.
-    static func defaultDeparture(now: Date = Date()) -> Date {
-        let cal = Calendar.current
+    static func defaultDeparture(now: Date = Date(), timeZone: TimeZone = .current) -> Date {
+        var cal = Calendar(identifier: .gregorian)
+        cal.timeZone = timeZone
         let plusHour = now.addingTimeInterval(3600)
-        var comps = cal.dateComponents([.year, .month, .day, .hour], from: plusHour)
-        comps.minute = 0
-        comps.second = 0
-        return cal.date(from: comps) ?? plusHour
+        return cal.dateInterval(of: .hour, for: plusHour)?.start ?? plusHour
     }
 
     var departureTimeZone: TimeZone {

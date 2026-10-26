@@ -18,6 +18,7 @@ struct RoadTripWeatherApp: App {
 
 struct RootView: View {
     @Environment(AppEnvironment.self) private var env
+    @Environment(\.scenePhase) private var scenePhase
     @State private var coordinator: BriefingCoordinator?
 
     var body: some View {
@@ -39,6 +40,10 @@ struct RootView: View {
             }
         }
         .background(Theme.background)
+        .task(id: "\(scenePhase)-\(env.settings.poiAutoRefreshEnabled)") {
+            guard scenePhase == .active, !env.isPreview else { return }
+            await env.pois.refreshAutomaticallyIfDue(enabled: { env.settings.poiAutoRefreshEnabled })
+        }
     }
 }
 

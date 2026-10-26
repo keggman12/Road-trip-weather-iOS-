@@ -27,6 +27,24 @@ struct PlanScreenTests {
         return BriefingCoordinator(env: env)
     }
 
+    @Test func pastDepartureDoesNotClearCachedRoutes() async throws {
+        let c = try makeCoordinator()
+        c.plan.originText = "Denver"
+        c.plan.destinationText = "Dallas"
+        await c.findRoutes()
+        let routes = c.routes
+        let past = Date().addingTimeInterval(-86400)
+        c.plan.departure = past
+        await c.findRoutes()
+        #expect(!c.canFindRoutes)
+        #expect(c.plan.departure == past)
+        #expect(c.routes == routes)
+        #expect(c.errorMessage?.contains("departure has passed") == true)
+        c.departToday()
+        #expect(c.plan.departure > Date())
+        #expect(c.routes == routes)
+    }
+
     @Test func findRoutesNeedsOriginAndDestination() throws {
         let c = try makeCoordinator()
         #expect(!c.canFindRoutes)

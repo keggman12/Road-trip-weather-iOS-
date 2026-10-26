@@ -46,7 +46,7 @@ struct OptimizerView: View {
                     } else {
                         Section("Ranked departures") {
                             ForEach(Array(result.ranked.enumerated()), id: \.element.id) { i, cell in
-                                Button { adopt(cell) } label: { OptimizerRow(cell: cell, isBest: i == 0, timeZone: tz) }
+                                Button { adopt(cell) } label: { OptimizerRow(cell: cell, isBest: cell.id == result.best?.id, timeZone: tz) }
                                     .buttonStyle(.plain)
                             }
                         }

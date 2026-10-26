@@ -45,13 +45,14 @@ struct StopEditTests {
         #expect(!StopEditReplayer.remove(stopID: UUID(), from: &b))
     }
 
-    @Test func insertSnapsToRouteAndKeepsPOIIdentity() throws {
+    @Test func insertKeepsDestinationCoordinatesAndProjectsForOrdering() throws {
         var b = briefing()
         let edit = ManualStopEdit(coordinate: Coordinate(lat: 36.0, lon: -100.5), label: "Love's #312", dwellMinutes: 20, manualOvernight: true, poiKind: .loves, poiSourceID: "loves/312")
         let s = try #require(StopEditReplayer.insert(edit, into: &b))
         #expect(s.kind == .poi && s.poiKind == .loves && s.poiSourceID == "loves/312")
         #expect(s.dwellMinutes == 20 && s.manualOvernight)
-        #expect(approx(s.coordinate.lat, ref.project.lat, tolerance: 1e-9))
+        #expect(s.coordinate == edit.coordinate)
+        #expect(StopEdits(from: b).manualStops.first?.coordinate == edit.coordinate)
         #expect(approx(s.distanceMi, ref.project.distanceMi, tolerance: 1e-6))
         #expect(approx(s.offRouteMi ?? -1, ref.project.distOff, tolerance: 1e-9))
         ETACalculator.recompute(&b, fallbackTimeZone: utc)
