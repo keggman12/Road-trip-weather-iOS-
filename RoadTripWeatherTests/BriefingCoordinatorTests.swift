@@ -31,6 +31,47 @@ struct BriefingCoordinatorTests {
         return c
     }
 
+    @Test func explicitDepartureEditRejectsPastAndPreservesItinerary() async throws {
+        let c = try makeCoordinator()
+        await c.findRoutes()
+        await c.generateBriefing()
+        let original = try #require(c.briefing)
+        c.updateDwell(stopID: original.stops[1].id, minutes: 75)
+        let edited = try #require(c.briefing)
+        let now = Date()
+        c.setDeparture(now.addingTimeInterval(-60), now: now)
+        #expect(c.plan.departure == original.departure)
+        #expect(c.errorMessage != nil)
+        c.departToday(now: original.departure.addingTimeInterval(60))
+        #expect(c.plan.departure > original.departure)
+        #expect(c.briefing?.stops.map(\.id) == edited.stops.map(\.id))
+        #expect(c.briefing?.stops[1].dwellMinutes == 75)
+        #expect(c.briefing?.stops.map(\.weather) == edited.stops.map(\.weather))
+        #expect(c.briefing?.departure == c.plan.departure)
+    }
+
+    @Test func refreshSkipsElapsedStopsAndEndedTripsKeepCache() async throws {
+        let weather = SwitchableWeather()
+        let c = try makeCoordinator(weather: weather)
+        await c.findRoutes()
+        await c.generateBriefing()
+        let cached = try #require(c.briefing)
+        let cutoff = cached.stops[1].eta
+        await weather.resetRequests()
+        await c.refreshForecasts(now: cutoff)
+        #expect(await weather.requests.sorted() == cached.stops.filter { $0.eta >= cutoff }.map(\.eta).sorted())
+        #expect(c.briefing?.stops.first == cached.stops.first)
+        #expect(c.briefing?.generatedAt == cached.generatedAt)
+        #expect(c.statusMessage?.contains("upcoming stops") == true)
+        let refreshed = try #require(c.briefing)
+        await weather.resetRequests()
+        let last = try #require(cached.stops.last)
+        await c.refreshForecasts(now: last.eta.addingTimeInterval(1))
+        #expect(await weather.requests.isEmpty)
+        #expect(c.briefing?.stops == refreshed.stops)
+        #expect(c.statusMessage?.contains("trip has ended") == true)
+    }
+
     @Test func failedRefreshPreservesCacheAndReportsFailure() async throws {
         let weather = SwitchableWeather()
         let c = try makeCoordinator(weather: weather)
@@ -131,11 +172,14 @@ private struct AttributedMockWeather: WeatherService {
 }
 
 private actor SwitchableWeather: WeatherService {
+    var requests: [Date] = []
+    func resetRequests() { requests = [] }
     var failing = false
     var failedCoordinate: Coordinate?
     func fail(at coordinate: Coordinate) { failedCoordinate = coordinate }
     func fail() { failing = true }
     func forecast(at coordinate: Coordinate, for eta: Date) async throws -> ForecastResult {
+        requests.append(eta)
         if failing || coordinate == failedCoordinate { throw URLError(.notConnectedToInternet) }
         return try await MockWeatherService().forecast(at: coordinate, for: eta)
     }

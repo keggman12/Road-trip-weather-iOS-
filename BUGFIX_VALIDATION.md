@@ -50,3 +50,14 @@ The adapter now validates a nonempty interval before constructing the WeatherKit
 For a new trip, choose a current or future departure in Plan. Saved trips keep the user's selected date; the app does not silently change it.
 
 Verified after the crash fix: 73 deterministic app tests and 115 core tests passed; the signed build installed and launched on the physical iPhone. The user confirmed the previous crash became an unavailable-weather result, and their screenshot showed October 17 ETAs on October 26. Stop cards now explain expired dates with a PAST badge, and Plan warns about past departures.
+
+
+## Departure-date safeguards — 2026-10-26
+
+New departures default to the next full hour. Plan's picker and coordinator reject past selections, including earlier times today; Find Routes validates before clearing existing routes. Old saved departures remain visible, with an explicit Depart today action (Depart tomorrow near midnight). That action retimes the edited draft, preserves stop IDs/dwell/overnights/removals/cache, and clears obsolete optimizer results. Saved trip records are not silently overwritten.
+
+Refresh and regeneration request upcoming stops only. Elapsed stops retain cached history. Ended trips make no forecast/alert calls and explain how to reuse the trip. Upcoming-only refreshes do not advance the whole briefing's freshness timestamp.
+
+Validation: 76 deterministic app tests and 115 core tests passed in the simulator; signed generic iOS build succeeded and installed on the physical iPhone. Automatic launch was blocked only because the phone was locked; unlock and tap Road Trip Weather. Regression tests cover rejected edits, cache/routes preservation, explicit reuse with stop edits, and upcoming-only/ended-trip refresh. Live routing and WeatherKit tests remain excluded from the deterministic run.
+
+Test: load the old October 17 trip, confirm its date is unchanged, tap Depart today in Plan, and open its existing route to regenerate. Stop edits should remain. Yesterday should be unavailable for new departure selections; earlier times today are rejected. Underway trips can refresh their upcoming stops without changing the original departure.

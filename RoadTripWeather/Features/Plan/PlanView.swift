@@ -36,11 +36,24 @@ struct PlanView: View {
             }
 
             Section("Departure") {
-                DatePicker("Depart", selection: $coordinator.plan.departure, displayedComponents: [.date, .hourAndMinute])
-                    .environment(\.timeZone, coordinator.plan.departureTimeZone)
-                if coordinator.plan.departure < Date() {
-                    Text("This departure is in the past. Change it for a new trip.")
-                        .font(.caption).foregroundStyle(Theme.warn)
+                TimelineView(.periodic(from: .now, by: 30)) { context in
+                    let now = context.date
+                    if coordinator.plan.departure < now {
+                        VStack(alignment: .leading, spacing: 8) {
+                            Text("Depart \(Fmt.clock(coordinator.plan.departure, timeZone: coordinator.plan.departureTimeZone))")
+                            Text("This departure has passed. Saved dates and cached briefings are kept; upcoming stops can still be refreshed.")
+                                .font(.caption).foregroundStyle(Theme.warn)
+                            Button(departTodayLabel(now: now)) { coordinator.departToday() }
+                                .disabled(coordinator.isBusy)
+                        }
+                    } else {
+                        DatePicker("Depart", selection: Binding(
+                            get: { coordinator.plan.departure },
+                            set: { coordinator.setDeparture($0) }
+                        ), in: now..., displayedComponents: [.date, .hourAndMinute])
+                            .environment(\.timeZone, coordinator.plan.departureTimeZone)
+                            .disabled(coordinator.isBusy)
+                    }
                 }
                 if let id = coordinator.plan.departureTimeZoneID {
                     Text("Times in \(id) (origin)").font(.caption).foregroundStyle(Theme.muted)
@@ -140,6 +153,13 @@ struct PlanView: View {
                 coordinator.plan.rangeMi = first.rangeMi
             }
         }
+    }
+
+    private func departTodayLabel(now: Date) -> String {
+        var calendar = Calendar(identifier: .gregorian)
+        calendar.timeZone = coordinator.plan.departureTimeZone
+        let next = TripPlan.defaultDeparture(now: now, timeZone: calendar.timeZone)
+        return calendar.isDate(now, inSameDayAs: next) ? "Depart today" : "Depart tomorrow"
     }
 
     private var buttonTitle: String {

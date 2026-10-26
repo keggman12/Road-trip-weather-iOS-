@@ -168,3 +168,8 @@ Branch `codex/bugfix-weather-itinerary`. Resolved forecast cache/failure reporti
 ### Physical iPhone crash follow-up
 
 On-device crash reports identified a WeatherKit `DateInterval(start:end:)` trap for expired ETAs. The request adapter now rejects empty/reversed windows before calling WeatherKit. Four regressions cover expired/boundary/current/future dates and the no-network service paths. Deterministic simulator suite: 73 app + 115 core passed. Signed fix installed and launched on the physical iPhone; user screenshot confirmed briefing remained open with October 17 ETAs on October 26. Added explicit past-date warnings on Plan and stop cards.
+
+
+### Departure safeguards follow-up
+
+Plan now prevents past new departure selections/searches and offers explicit Depart today/tomorrow for old trips without silently changing saved dates. Explicit changes retime edited drafts; refresh/regeneration fetch upcoming stops only and retain elapsed cache. Deterministic simulator: 76 app + 115 core tests passed. Signed app installed on iPhone; automatic launch blocked by locked device. Unlock and tap the app to test. See BUGFIX_VALIDATION.md.

@@ -62,18 +62,45 @@ final class BriefingCoordinator {
     var selectedRoute: RouteGeometry? { routes.indices.contains(selectedRouteIndex) ? routes[selectedRouteIndex] : nil }
     var briefing: Briefing? { briefings[selectedRouteIndex] }
 
+    /// An explicit edit retimes the draft while leaving the saved trip record untouched.
+    func setDeparture(_ departure: Date, now: Date = Date()) {
+        guard !isBusy, departure >= now else {
+            errorMessage = "Choose a departure time in the future."
+            return
+        }
+        plan.departure = departure
+        for j in Array(briefings.keys) {
+            guard var b = briefings[j] else { continue }
+            b.departure = departure
+            ETACalculator.recompute(&b, fallbackTimeZone: plan.departureTimeZone)
+            briefings[j] = b
+        }
+        optimizer = nil
+        errorMessage = nil
+        statusMessage = "Departure updated — generate or refresh weather for the new arrival times."
+        persistSession()
+    }
+
+    func departToday(now: Date = Date()) {
+        setDeparture(TripPlan.defaultDeparture(now: now, timeZone: plan.departureTimeZone), now: now)
+    }
+
     // MARK: Phase 1 — find routes (no weather calls)
 
     /// Find Routes is enabled once origin and destination have text (blank
     /// or whitespace doesn't count) and nothing else is running.
     var canFindRoutes: Bool {
-        !isBusy
+        !isBusy && plan.departure >= Date()
             && !plan.originText.trimmingCharacters(in: .whitespaces).isEmpty
             && !plan.destinationText.trimmingCharacters(in: .whitespaces).isEmpty
     }
 
-    func findRoutes() async {
+    func findRoutes(now: Date = Date()) async {
         errorMessage = nil
+        guard plan.departure >= now else {
+            errorMessage = "This departure has passed. Choose a future departure to find routes; cached trips remain available."
+            return
+        }
         let originText = plan.originText.trimmingCharacters(in: .whitespaces)
         let destText = plan.destinationText.trimmingCharacters(in: .whitespaces)
         guard !originText.isEmpty, !destText.isEmpty else {
@@ -213,6 +240,7 @@ final class BriefingCoordinator {
 
     /// Briefs the selected route (default) or every route.
     private var forecastFailures: [Int: Int] = [:]
+    private var requestedForecasts: [Int: Int] = [:]
 
     func generateBriefing(allRoutes: Bool = false) async {
         guard selectedRouteIndex >= 0 else { errorMessage = "Pick a route first."; return }
@@ -226,6 +254,7 @@ final class BriefingCoordinator {
         // it is complete and persisted.
         var fresh: [Int: Briefing] = [:]
         forecastFailures = [:]
+        requestedForecasts = [:]
         let wantChargers = await chargersWanted()
         for j in indices {
             if let b = await brief(routeIndex: j, label: routes[j].label ?? "Route \(j + 1)", withChargers: wantChargers) { fresh[j] = b }
@@ -242,9 +271,12 @@ final class BriefingCoordinator {
         phase = .idle
         if let b = briefing {
             let failed = forecastFailures.values.reduce(0, +)
-            let total = fresh.values.reduce(0) { $0 + $1.stops.count }
+            let total = requestedForecasts.values.reduce(0, +)
+            let skipped = fresh.values.reduce(0) { $0 + $1.stops.count } - total
             let alerts = b.alerts.count
-            if failed > 0 { statusMessage = "Briefing ready — \(failed) of \(total) forecasts failed; cached forecasts kept where available." }
+            if total == 0 { statusMessage = "This trip has ended. Cached forecasts kept. Choose Depart today in Plan to reuse it." }
+            else if failed > 0 { statusMessage = "Briefing ready — \(failed) of \(total) forecasts failed; cached forecasts kept where available." }
+            else if skipped > 0 { statusMessage = "Refreshed \(total) upcoming stops. Past stops kept as cached history." }
             else if alerts > 0 { statusMessage = "Briefing ready — ⚠ \(alerts) weather alert\(alerts == 1 ? "" : "s") during transit." }
             else { statusMessage = "Briefing ready — \(b.stops.count) waypoints." }
         }
@@ -293,9 +325,14 @@ final class BriefingCoordinator {
         await resolveTimeZones(&b)
         // Time zones can change overnight resume times, so recompute.
         ETACalculator.recompute(&b, fallbackTimeZone: plan.departureTimeZone)
-        let failed = await fetchWeather(for: &b, indices: Array(b.stops.indices), routeLabel: label, withChargers: withChargers, progress: progress)
-        if progress == nil { forecastFailures[j] = failed }
-        if failed == 0 { b.generatedAt = Date() }
+        let now = Date()
+        let indices = b.stops.indices.filter { departure != nil || b.stops[$0].eta >= now }
+        let failed = await fetchWeather(for: &b, indices: indices, routeLabel: label, withChargers: withChargers, progress: progress)
+        if progress == nil {
+            forecastFailures[j] = failed
+            requestedForecasts[j] = indices.count
+        }
+        if failed == 0 && indices.count == b.stops.count { b.generatedAt = Date() }
         return b
     }
 
@@ -456,18 +493,28 @@ final class BriefingCoordinator {
     }
 
     /// Web `refreshForecasts`: refetch weather + alerts at the current ETAs.
-    func refreshForecasts() async {
-        guard var b = briefing else { return }
-        phase = .refreshing(done: 0, total: b.stops.count)
-        let failed = await fetchWeather(for: &b, indices: Array(b.stops.indices), routeLabel: b.routeLabel ?? "") { [weak self] done, total in
+    func refreshForecasts(now: Date = Date()) async {
+        guard !isBusy, var b = briefing else { return }
+        let indices = b.stops.indices.filter { b.stops[$0].eta >= now }
+        guard !indices.isEmpty else {
+            statusMessage = "This trip has ended. Cached forecasts kept. Choose Depart today in Plan to reuse it."
+            return
+        }
+        phase = .refreshing(done: 0, total: indices.count)
+        let failed = await fetchWeather(for: &b, indices: indices, routeLabel: b.routeLabel ?? "") { [weak self] done, total in
             self?.phase = .refreshing(done: done, total: total)
         }
-        if failed == 0 { b.generatedAt = Date() }
+        if failed == 0 && indices.count == b.stops.count { b.generatedAt = Date() }
         briefings[selectedRouteIndex] = b
         persistSession()
         phase = .idle
-        statusMessage = failed == 0 ? "Forecasts refreshed for current ETAs." :
-            "Refresh failed for \(failed) of \(b.stops.count) forecasts — cached forecasts kept where available."
+        if failed > 0 {
+            statusMessage = "Refresh failed for \(failed) of \(indices.count) forecasts — cached forecasts kept where available."
+        } else if indices.count < b.stops.count {
+            statusMessage = "Refreshed \(indices.count) upcoming stops. Past stops kept as cached history."
+        } else {
+            statusMessage = "Forecasts refreshed for current ETAs."
+        }
     }
 
     /// Web `insertManualStop` from a POI pin ("Add as fuel stop").
