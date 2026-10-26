@@ -27,7 +27,7 @@ struct SettingsView: View {
                         .font(.caption).foregroundStyle(Theme.muted)
                 }
                 Section("Data") {
-                    Toggle("Weekly automatic Buc-ee's / Love's refresh", isOn: Bindable(env.settings).poiAutoRefreshEnabled)
+                    Toggle("Weekly Buc-ee's / Love's refresh when app is active", isOn: Bindable(env.settings).poiAutoRefreshEnabled)
                     Toggle("iCloud sync (restart required)", isOn: Bindable(env.settings).cloudSyncEnabled)
                     NavigationLink("Data sources and freshness") { DataSourcesView() }
                 }

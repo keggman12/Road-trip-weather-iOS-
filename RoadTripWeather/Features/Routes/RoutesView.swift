@@ -32,7 +32,7 @@ struct RoutesView: View {
                 // Cached briefings pad un-briefed indices with empty
                 // placeholders; those aren't routes the user can pick.
                 ForEach(realRoutes, id: \.offset) { i, route in
-                    RouteRow(index: i, route: route, fastest: fastestDuration, selected: i == coordinator.selectedRouteIndex, score: coordinator.briefings[i].map { TripScorer.score($0.stops).score })
+                    RouteRow(index: i, route: route, fastest: fastestDuration, selected: i == coordinator.selectedRouteIndex, score: coordinator.briefings[i].flatMap { b in b.stops.isEmpty || b.stops.contains(where: { $0.weather == nil || $0.isForecastStale }) ? nil : TripScorer.score(b.stops).score })
                         .contentShape(Rectangle())
                         .onTapGesture { coordinator.selectRoute(i) }
                 }

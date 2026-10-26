@@ -33,7 +33,7 @@ struct OptimizerResult: Sendable {
 
     /// Lowest score; ties go to the earlier candidate (web `reduce(<=)`).
     var best: OptimizerCell? {
-        cells.reduce(nil) { best, c in
+        cells.filter { $0.failedForecasts == 0 }.reduce(nil) { best, c in
             guard let b = best else { return c }
             return c.score < b.score ? c : b
         }
@@ -42,7 +42,10 @@ struct OptimizerResult: Sendable {
     /// Single-route list, best first; ties keep departure order (JS sort is stable).
     var ranked: [OptimizerCell] {
         cells.enumerated().sorted { l, r in
-            l.element.score != r.element.score ? l.element.score < r.element.score : l.offset < r.offset
+            if (l.element.failedForecasts == 0) != (r.element.failedForecasts == 0) {
+                return l.element.failedForecasts == 0
+            }
+            return l.element.score != r.element.score ? l.element.score < r.element.score : l.offset < r.offset
         }.map(\.element)
     }
 }
@@ -101,6 +104,8 @@ extension BriefingCoordinator {
             statusMessage = "\(result.cancelled ? "Optimizer cancelled" : "Optimizer done") — best: depart \(Fmt.clock(best.departure, timeZone: plan.departureTimeZone))\(route) (score \(best.score))."
         } else if result.cancelled {
             statusMessage = "Optimizer cancelled."
+        } else {
+            statusMessage = "Optimizer done — no departure has complete forecasts."
         }
     }
 

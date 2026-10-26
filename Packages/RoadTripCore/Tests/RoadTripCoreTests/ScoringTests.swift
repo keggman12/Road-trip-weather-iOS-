@@ -40,6 +40,14 @@ struct ScoringTests {
         #expect(TripScorer.penalty(for: webInput[2]) == nil)
     }
 
+    @Test func alertsCountWithoutForecasts() {
+        var unknown = webInput[2]
+        unknown.alerts = [WeatherAlert(id: "warning", event: "Tornado Warning")]
+        let scored = TripScorer.score([unknown])
+        #expect(scored.score == 50)
+        #expect(scored.worstStopIndex == 0)
+    }
+
     @Test func emptyAndUnknown() {
         let e = TripScorer.score([])
         #expect(e.score == ref.scoreEmpty.score && e.worstStopIndex == nil)

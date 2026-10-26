@@ -93,7 +93,7 @@ public enum StopEditReplayer {
         let stop = Stop(
             kind: edit.poiKind == nil ? .manual : .poi,
             label: edit.label,
-            coordinate: proj.coordinate,
+            coordinate: edit.coordinate,
             routeIndex: proj.routeIndex,
             distanceMi: proj.distanceMi,
             dwellMinutes: edit.dwellMinutes,

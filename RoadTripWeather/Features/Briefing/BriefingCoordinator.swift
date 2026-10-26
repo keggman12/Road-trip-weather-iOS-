@@ -212,6 +212,8 @@ final class BriefingCoordinator {
     // MARK: Phase 2 — generate briefing
 
     /// Briefs the selected route (default) or every route.
+    private var forecastFailures: [Int: Int] = [:]
+
     func generateBriefing(allRoutes: Bool = false) async {
         guard selectedRouteIndex >= 0 else { errorMessage = "Pick a route first."; return }
         guard let selected = selectedRoute, selected.coordinates.count >= 2 else {
@@ -223,15 +225,12 @@ final class BriefingCoordinator {
         // Built off-screen: nothing reaches `briefings` (and the UI) until
         // it is complete and persisted.
         var fresh: [Int: Briefing] = [:]
+        forecastFailures = [:]
         let wantChargers = await chargersWanted()
         for j in indices {
             if let b = await brief(routeIndex: j, label: routes[j].label ?? "Route \(j + 1)", withChargers: wantChargers) { fresh[j] = b }
         }
-        if let edits = plan.stopEdits.isEmpty ? nil : plan.stopEdits, var b = fresh[selectedRouteIndex] {
-            await replayEdits(edits, into: &b, withChargers: wantChargers)
-            fresh[selectedRouteIndex] = b
-            plan.stopEdits = StopEdits()
-        }
+        if fresh[selectedRouteIndex] != nil { plan.stopEdits = StopEdits() }
         if weatherAttributionURL == nil { weatherAttributionURL = await env.weather.attributionURL() }
         // Persisted with the briefing so a cached trip can show it offline.
         if let url = weatherAttributionURL?.absoluteString {
@@ -242,9 +241,10 @@ final class BriefingCoordinator {
         await refreshPOILayers()
         phase = .idle
         if let b = briefing {
-            let failed = b.stops.filter { $0.weather == nil && $0.horizon == .failed }.count
+            let failed = forecastFailures.values.reduce(0, +)
+            let total = fresh.values.reduce(0) { $0 + $1.stops.count }
             let alerts = b.alerts.count
-            if failed > 0 { statusMessage = "Briefing ready — \(failed) of \(b.stops.count) forecasts failed." }
+            if failed > 0 { statusMessage = "Briefing ready — \(failed) of \(total) forecasts failed; cached forecasts kept where available." }
             else if alerts > 0 { statusMessage = "Briefing ready — ⚠ \(alerts) weather alert\(alerts == 1 ? "" : "s") during transit." }
             else { statusMessage = "Briefing ready — \(b.stops.count) waypoints." }
         }
@@ -273,6 +273,17 @@ final class BriefingCoordinator {
             stops: stops0,
             generatedAt: Date()
         )
+        if let existing = briefings[j] {
+            b = existing
+            b.departure = departure ?? plan.departure
+            b.multiDay = plan.multiDay
+        } else if j == selectedRouteIndex && !plan.stopEdits.isEmpty {
+            await replayEdits(plan.stopEdits, into: &b)
+        }
+        // Optimizer candidates require a fresh result for their own departure.
+        if departure != nil {
+            for i in b.stops.indices { b.stops[i].weather = nil; b.stops[i].forecastFor = nil }
+        }
         guard !b.stops.isEmpty else { return nil }
         b.stops[0].timeZoneID = plan.origin?.timeZoneID
         if b.stops.count > 1 { b.stops[b.stops.count - 1].timeZoneID = plan.destination?.timeZoneID }
@@ -282,8 +293,9 @@ final class BriefingCoordinator {
         await resolveTimeZones(&b)
         // Time zones can change overnight resume times, so recompute.
         ETACalculator.recompute(&b, fallbackTimeZone: plan.departureTimeZone)
-        await fetchWeather(for: &b, indices: Array(b.stops.indices), routeLabel: label, withChargers: withChargers, progress: progress)
-        b.generatedAt = Date()
+        let failed = await fetchWeather(for: &b, indices: Array(b.stops.indices), routeLabel: label, withChargers: withChargers, progress: progress)
+        if progress == nil { forecastFailures[j] = failed }
+        if failed == 0 { b.generatedAt = Date() }
         return b
     }
 
@@ -341,7 +353,8 @@ final class BriefingCoordinator {
     /// Web `fetchStopWeather`: forecast + alerts (+ Superchargers when
     /// `withChargers`, never for the origin) for each stop, concurrently.
     /// `progress(done, total)` defaults to the briefing phase for `routeLabel`.
-    func fetchWeather(for b: inout Briefing, indices: [Int], routeLabel: String, withChargers: Bool = false, progress: ((Int, Int) -> Void)? = nil) async {
+    @discardableResult
+    func fetchWeather(for b: inout Briefing, indices: [Int], routeLabel: String, withChargers: Bool = false, progress: ((Int, Int) -> Void)? = nil) async -> Int {
         let total = indices.count
         var done = 0
         let snapshot = b
@@ -373,15 +386,14 @@ final class BriefingCoordinator {
         for r in results.sorted(by: { $0.index < $1.index }) {
             let i = r.index
             env.status.countCall(.weatherkit)
-            if let forecast = r.forecast {
+            if let forecast = r.forecast, forecast.horizon != .failed {
                 b.stops[i].weather = forecast.snapshot
                 b.stops[i].horizon = forecast.horizon
+                b.stops[i].forecastFor = b.stops[i].eta
             } else {
-                b.stops[i].weather = nil
-                b.stops[i].horizon = .failed
+                if b.stops[i].weather == nil { b.stops[i].horizon = .failed }
                 failed.append(b.stops[i].label)
             }
-            b.stops[i].forecastFor = b.stops[i].eta
             b.stops[i].alerts = r.alerts
             switch r.chargers {
             case nil:
@@ -407,6 +419,7 @@ final class BriefingCoordinator {
         if let first = chargerErrors.first {
             env.status.recordError(.openChargeMap, "\(chargerErrors.count) of \(lookups) lookups failed (\(first))")
         }
+        return failed.count
     }
 
     private nonisolated static func lookUpChargers(_ service: any ChargerService, near c: Coordinate) async -> Result<[Charger], ChargerLookupError> {
@@ -446,14 +459,15 @@ final class BriefingCoordinator {
     func refreshForecasts() async {
         guard var b = briefing else { return }
         phase = .refreshing(done: 0, total: b.stops.count)
-        await fetchWeather(for: &b, indices: Array(b.stops.indices), routeLabel: b.routeLabel ?? "") { [weak self] done, total in
+        let failed = await fetchWeather(for: &b, indices: Array(b.stops.indices), routeLabel: b.routeLabel ?? "") { [weak self] done, total in
             self?.phase = .refreshing(done: done, total: total)
         }
-        b.generatedAt = Date()
+        if failed == 0 { b.generatedAt = Date() }
         briefings[selectedRouteIndex] = b
         persistSession()
         phase = .idle
-        statusMessage = "Forecasts refreshed for current ETAs."
+        statusMessage = failed == 0 ? "Forecasts refreshed for current ETAs." :
+            "Refresh failed for \(failed) of \(b.stops.count) forecasts — cached forecasts kept where available."
     }
 
     /// Web `insertManualStop` from a POI pin ("Add as fuel stop").
@@ -519,26 +533,15 @@ final class BriefingCoordinator {
         return true
     }
 
-    private func replayEdits(_ edits: StopEdits, into b: inout Briefing, withChargers: Bool) async {
+    private func replayEdits(_ edits: StopEdits, into b: inout Briefing) async {
         for id in StopEditReplayer.stopsToRemove(in: b.stops, removedMi: edits.removedMi) {
             StopEditReplayer.remove(stopID: id, from: &b)
         }
         ETACalculator.recompute(&b, fallbackTimeZone: plan.departureTimeZone)
-        var added: [Int] = []
-        for m in edits.manualStops {
-            if let s = StopEditReplayer.insert(m, into: &b) {
-                ETACalculator.recompute(&b, fallbackTimeZone: plan.departureTimeZone)
-                if let i = b.stops.firstIndex(where: { $0.id == s.id }) { added.append(i) }
-            }
-        }
-        if !added.isEmpty {
-            await resolveTimeZones(&b)
-            ETACalculator.recompute(&b, fallbackTimeZone: plan.departureTimeZone)
-            // Indices may have shifted after recompute's sort; refetch by id.
-            let ids = Set(added.compactMap { b.stops.indices.contains($0) ? b.stops[$0].id : nil })
-            let indices = b.stops.indices.filter { ids.contains(b.stops[$0].id) }
-            await fetchWeather(for: &b, indices: indices, routeLabel: b.routeLabel ?? "", withChargers: withChargers)
-        }
+        for m in edits.manualStops { _ = StopEditReplayer.insert(m, into: &b) }
+        await resolveTimeZones(&b)
+        ETACalculator.recompute(&b, fallbackTimeZone: plan.departureTimeZone)
+        // The caller fetches all stops after replay, including shifted downstream ETAs.
     }
 
     // MARK: POI layers (web loadPoiLayer / refreshPoiLayers)

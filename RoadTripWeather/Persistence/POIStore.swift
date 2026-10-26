@@ -25,6 +25,9 @@ final class POIStore: POIService {
 
     // MARK: Bundled snapshot
 
+    private var automaticRefreshRunning = false
+    private var refreshingKinds: Set<POIKind> = []
+
     private var importTask: Task<Void, Never>?
 
     /// Starts importing the bundled snapshot on a background context and
@@ -65,6 +68,8 @@ final class POIStore: POIService {
     func refresh(kind: POIKind) async throws -> POIRefreshOutcome {
         guard let refresher else { throw ServiceError.unavailable("POI refresh") }
         await importTask?.value
+        guard refreshingKinds.insert(kind).inserted else { throw ServiceError.unavailable("POI refresh already running") }
+        defer { refreshingKinds.remove(kind) }
         let meta = metaRecord(for: kind)
         meta.lastAttemptAt = Date()
         statusStore.countCall(DataSource(kind))
@@ -87,6 +92,20 @@ final class POIStore: POIService {
             try? context.save()
             statusStore.recordError(DataSource(kind), error.localizedDescription)
             throw error
+        }
+    }
+
+    /// Checks on launch, foreground entry and setting changes. Failed attempts
+    /// are throttled too; manual refresh remains available independently.
+    func refreshAutomaticallyIfDue(enabled: () -> Bool, now: Date = Date()) async {
+        guard enabled(), !automaticRefreshRunning else { return }
+        automaticRefreshRunning = true
+        defer { automaticRefreshRunning = false }
+        await importTask?.value
+        for kind in [POIKind.bucees, .loves] {
+            guard enabled(), !Task.isCancelled else { return }
+            guard !refreshingKinds.contains(kind), isDueForAutoRefresh(kind: kind, now: now) else { continue }
+            _ = try? await refresh(kind: kind)
         }
     }
 

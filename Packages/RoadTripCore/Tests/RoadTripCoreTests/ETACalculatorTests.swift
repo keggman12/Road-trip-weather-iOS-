@@ -81,10 +81,25 @@ struct ETACalculatorTests {
         let late = Date(timeIntervalSince1970: 1_781_134_200)
         let r1 = ETACalculator.nextResume(after: late, at: TimeOfDay(hour: 8, minute: 0), in: utc)
         #expect(r1.timeIntervalSince1970 == 1_781_164_800) // 2026-06-11 08:00Z
-        // Arrive 2026-06-10 03:00Z: tomorrow 08:00 is still the next day (web always moves to tomorrow first).
+        // Arrive 03:00Z: same morning, after the six-hour minimum rest.
         let early = Date(timeIntervalSince1970: 1_781_060_400)
         let r2 = ETACalculator.nextResume(after: early, at: TimeOfDay(hour: 8, minute: 0), in: utc)
-        #expect(r2.timeIntervalSince1970 == 1_781_164_800)
+        #expect(r2 == early.addingTimeInterval(6 * 3600))
+    }
+
+    @Test func sameMorningResumeAndMinimumRestAcrossDST() throws {
+        let formatter = ISO8601DateFormatter()
+        let zone = try #require(TimeZone(identifier: "America/Denver"))
+        for (arrival, expected) in [
+            ("2026-06-10T07:30:00Z", "2026-06-10T14:00:00Z"),
+            ("2026-06-10T13:30:00Z", "2026-06-10T19:30:00Z"),
+            ("2026-06-10T14:00:00Z", "2026-06-11T14:00:00Z"),
+            ("2026-03-08T08:30:00Z", "2026-03-08T14:30:00Z"),
+            ("2026-11-01T07:30:00Z", "2026-11-01T15:00:00Z")
+        ] {
+            let date = try #require(formatter.date(from: arrival))
+            #expect(ETACalculator.nextResume(after: date, at: TimeOfDay(hour: 8, minute: 0), in: zone) == formatter.date(from: expected))
+        }
     }
 
     @Test func sortsByDistanceBeforeComputing() {

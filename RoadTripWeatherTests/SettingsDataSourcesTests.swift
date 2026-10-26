@@ -121,6 +121,27 @@ struct SettingsDataSourcesTests {
         #expect(env.status.sessionCalls[.overpass] == 2)
     }
 
+    @Test func automaticRefreshRespectsToggleAndWeeklyFailureThrottle() async throws {
+        let session = RefreshStub.session()
+        RefreshStub.handler = { _ in (503, Data()) }
+        let refresher = POIRefreshService(appVersion: "test", session: session, overpass: OverpassClient(appVersion: "test", session: session, timeout: 5))
+        let env = try makeEnv(refresher: refresher)
+        await env.pois.importBundledSnapshotIfNeeded()
+        let before = try await env.pois.pois(kind: .bucees)
+        await env.pois.refreshAutomaticallyIfDue(enabled: { false })
+        #expect(env.pois.meta(for: .bucees)?.lastAttemptAt == nil)
+        await env.pois.refreshAutomaticallyIfDue(enabled: { true })
+        #expect(env.status.sessionCalls[.bucees] == 1)
+        #expect(env.status.sessionCalls[.loves] == 1)
+        #expect(env.pois.meta(for: .rest)?.lastAttemptAt == nil)
+        let after = try await env.pois.pois(kind: .bucees)
+        #expect(Set(after.map(\.sourceID)) == Set(before.map(\.sourceID)))
+        await env.pois.refreshAutomaticallyIfDue(enabled: { true })
+        #expect(env.status.sessionCalls[.bucees] == 1)
+        #expect(env.status.sessionCalls[.loves] == 1)
+        #expect(env.pois.isDueForAutoRefresh(kind: .bucees, now: Date().addingTimeInterval(8 * 24 * 3600)))
+    }
+
     @Test func rowWording() {
         let none = DataSourcesView.summary(for: .openChargeMap, status: nil, calls: 0, ocmKeyStored: false)
         #expect(none.state == "disabled — add a key in Settings")

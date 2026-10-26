@@ -158,3 +158,8 @@ Open:
 - Never ship fabricated POI data; regenerate the snapshot only with `tools/poi-snapshot`.
 - Be polite to third parties: NWS/Overpass identified by User-Agent, Overpass serialized with
   30 s cooldown on 429/406, brand refresh manual + at most weekly.
+
+
+## Local bugfix validation — 2026-10-26
+
+Branch `codex/bugfix-weather-itinerary`. Resolved forecast cache/failure reporting, missing-weather rankings and alert scoring, manual destination coordinates, Android-parity same-morning rest, foreground weekly POI refresh, and edited-itinerary reuse for regeneration/optimization. See `BUGFIX_VALIDATION.md` for behavior, exact checks and Xcode steps. Swift core: 115 passed. Deterministic iOS simulator: 69 app + 115 core passed. Full live-provider run failed only the existing Raton/eastern-alternate MapKit test (two assertions); routing was unchanged. Real-device WeatherKit/navigation and foreground POI checks remain manual.

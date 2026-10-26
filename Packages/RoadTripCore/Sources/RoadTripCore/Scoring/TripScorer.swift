@@ -32,7 +32,7 @@ public enum TripScorer {
     /// Per-stop penalty: `pop×40 + condition + |t−65|×0.3 + max(0, wind−10)×0.8
     /// + 40 if alerts`. Returns nil when the stop has no weather.
     public static func penalty(for stop: Stop) -> Double? {
-        guard let w = stop.weather else { return nil }
+        guard let w = stop.weather else { return stop.alerts.isEmpty ? nil : unknownWeatherPenalty + alertPenalty }
         var p = 0.0
         p += (w.precipitationChance ?? 0) * 40
         p += conditionPenalty(w.category)
