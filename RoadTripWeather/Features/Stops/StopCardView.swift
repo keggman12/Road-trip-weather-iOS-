@@ -71,6 +71,8 @@ struct StopCardView: View {
                     .font(.caption).foregroundStyle(Theme.ok)
             } else if stop.poiKind == .rest, stop.planNote == nil {
                 Label("Rest area\(offRouteText)", systemImage: "bed.double").font(.caption).foregroundStyle(Theme.muted)
+            } else if stop.kind == .via {
+                Label("Via-point\(offRouteText)", systemImage: "mappin.circle").font(.caption).foregroundStyle(Theme.accent)
             }
             if let note = stop.planNote {
                 Label(note, systemImage: "exclamationmark.triangle").font(.caption).foregroundStyle(Theme.warn)
@@ -105,12 +107,15 @@ struct StopCardView: View {
                     }
                     .toggleStyle(.switch)
                     .disabled(stop.autoOvernight)
-                    Button(role: .destructive, action: onRemove) {
-                        Label("Remove", systemImage: "xmark.circle").font(.caption)
+                    // A via stop goes with its via-point (Routes map or Plan).
+                    if stop.kind != .via {
+                        Button(role: .destructive, action: onRemove) {
+                            Label("Remove", systemImage: "xmark.circle").font(.caption)
+                        }
+                        .buttonStyle(.bordered)
+                        .controlSize(.small)
+                        .accessibilityLabel("Remove \(stop.label)")
                     }
-                    .buttonStyle(.bordered)
-                    .controlSize(.small)
-                    .accessibilityLabel("Remove \(stop.label)")
                 }
             }
         }

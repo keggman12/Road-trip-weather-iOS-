@@ -12,6 +12,9 @@ public enum StopKind: String, Codable, Sendable {
     case poi
     /// Placed by `StopPlanner` at a real Buc-ee's / Love's / rest area.
     case planned
+    /// A via-point the route was found through (typed or a dropped pin).
+    /// Rebuilt from the plan on every briefing; removed by removing the via.
+    case via
 
     public var isEndpoint: Bool { self == .origin || self == .destination }
     /// Web `isManual`: manual and POI stops.
@@ -132,6 +135,7 @@ extension Stop {
         if index == total - 1 { return "DEST" }
         if kind.isUserAdded { return poiKind?.stopTag ?? "MANUAL" }
         if kind == .planned, let poiKind { return poiKind.stopTag }
+        if kind == .via { return "VIA" }
         return "STOP \(index)"
     }
 

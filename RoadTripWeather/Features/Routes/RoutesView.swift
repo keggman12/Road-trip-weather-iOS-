@@ -7,24 +7,77 @@ import SwiftUI
 struct RoutesView: View {
     @Bindable var coordinator: BriefingCoordinator
     @State private var showBriefing = false
+    /// Where the user long-pressed, awaiting "Add via-point".
+    @State private var pendingPin: Coordinate?
+    @State private var viaToRemove: PlacePoint?
 
     var body: some View {
         VStack(spacing: 0) {
-            Map {
-                ForEach(Array(coordinator.routes.enumerated()), id: \.offset) { i, route in
-                    MapPolyline(coordinates: route.coordinates.map(\.clLocationCoordinate))
-                        .stroke(
-                            Theme.routeColor(i).opacity(i == coordinator.selectedRouteIndex ? 1 : 0.5),
-                            style: StrokeStyle(lineWidth: i == coordinator.selectedRouteIndex ? 6 : 3.5, dash: i == coordinator.selectedRouteIndex ? [] : [3, 7])
-                        )
+            MapReader { proxy in
+                Map {
+                    ForEach(Array(coordinator.routes.enumerated()), id: \.offset) { i, route in
+                        MapPolyline(coordinates: route.coordinates.map(\.clLocationCoordinate))
+                            .stroke(
+                                Theme.routeColor(i).opacity(i == coordinator.selectedRouteIndex ? 1 : 0.5),
+                                style: StrokeStyle(lineWidth: i == coordinator.selectedRouteIndex ? 6 : 3.5, dash: i == coordinator.selectedRouteIndex ? [] : [3, 7])
+                            )
+                    }
+                    ForEach(coordinator.plan.vias, id: \.query) { via in
+                        Annotation(via.label, coordinate: via.coordinate.clLocationCoordinate, anchor: .bottom) {
+                            Button { viaToRemove = via } label: {
+                                Image(systemName: "mappin.circle.fill")
+                                    .font(.title2)
+                                    .foregroundStyle(.white, Theme.accent)
+                            }
+                            .accessibilityLabel("Via-point \(via.label)")
+                        }
+                        .annotationTitles(.hidden)
+                    }
+                    if let pendingPin {
+                        Marker("New via-point", systemImage: "mappin", coordinate: pendingPin.clLocationCoordinate)
+                    }
                 }
+                .mapStyle(.standard(elevation: .flat, emphasis: .muted))
+                // Hold, then lift: drops a pin where the finger was. Simultaneous
+                // so panning and zooming the map still work.
+                .simultaneousGesture(
+                    LongPressGesture(minimumDuration: 0.5)
+                        .sequenced(before: DragGesture(minimumDistance: 0, coordinateSpace: .local))
+                        .onEnded { value in
+                            guard canDropPin, case let .second(true, drag?) = value,
+                                  let c = proxy.convert(drag.location, from: .local)
+                            else { return }
+                            pendingPin = Coordinate(c)
+                        }
+                )
             }
-            .mapStyle(.standard(elevation: .flat, emphasis: .muted))
             .frame(height: 260)
+            .confirmationDialog("Add a via-point here?", isPresented: Binding(get: { pendingPin != nil }, set: { if !$0 { pendingPin = nil } }), titleVisibility: .visible, presenting: pendingPin) { pin in
+                Button("Add via-point and find routes") {
+                    pendingPin = nil
+                    Task { await coordinator.addViaPin(at: pin) }
+                }
+                Button("Cancel", role: .cancel) { pendingPin = nil }
+            } message: { _ in
+                Text(coordinator.briefings.isEmpty
+                     ? "Routes are found again through this spot."
+                     : "Routes are found again through this spot; this search’s briefings are cleared (saved trips keep theirs).")
+            }
+            .confirmationDialog(viaToRemove.map { "Remove \($0.label)?" } ?? "", isPresented: Binding(get: { viaToRemove != nil }, set: { if !$0 { viaToRemove = nil } }), titleVisibility: .visible, presenting: viaToRemove) { via in
+                Button("Remove via-point and find routes", role: .destructive) {
+                    viaToRemove = nil
+                    Task { await coordinator.removeVia(query: via.query) }
+                }
+                Button("Cancel", role: .cancel) { viaToRemove = nil }
+            }
 
             List {
                 if let note = coordinator.routeNote {
                     Text("ℹ \(note)").font(.footnote).foregroundStyle(Theme.muted)
+                }
+                if canDropPin {
+                    Text("Long-press the map to add a via-point and reshape the route. Tap a pin to remove it.")
+                        .font(.footnote).foregroundStyle(Theme.muted)
                 }
                 if realRoutes.count < coordinator.routes.count {
                     Text("ℹ Showing cached routes only. Find Routes again for every alternative.").font(.footnote).foregroundStyle(Theme.muted)
@@ -83,6 +136,11 @@ struct RoutesView: View {
         .navigationDestination(isPresented: $showBriefing) {
             BriefingView(coordinator: coordinator)
         }
+    }
+
+    /// Pins need the trip's geocoded ends and a free coordinator.
+    private var canDropPin: Bool {
+        !coordinator.isBusy && coordinator.plan.origin != nil && coordinator.plan.destination != nil
     }
 
     private var realRoutes: [(offset: Int, element: RouteGeometry)] {
