@@ -68,6 +68,15 @@ final class BriefingCoordinator {
             errorMessage = "Choose a departure time in the future."
             return
         }
+        retime(to: departure)
+        optimizer = nil
+        errorMessage = nil
+        statusMessage = "Departure updated — generate or refresh weather for the new arrival times."
+        persistSession()
+    }
+
+    /// Moves the plan and every briefing to `departure`, keeping stops and cache.
+    func retime(to departure: Date) {
         plan.departure = departure
         for j in Array(briefings.keys) {
             guard var b = briefings[j] else { continue }
@@ -75,10 +84,6 @@ final class BriefingCoordinator {
             ETACalculator.recompute(&b, fallbackTimeZone: plan.departureTimeZone)
             briefings[j] = b
         }
-        optimizer = nil
-        errorMessage = nil
-        statusMessage = "Departure updated — generate or refresh weather for the new arrival times."
-        persistSession()
     }
 
     func departToday(now: Date = Date()) {
@@ -242,14 +247,20 @@ final class BriefingCoordinator {
     private var forecastFailures: [Int: Int] = [:]
     private var requestedForecasts: [Int: Int] = [:]
 
-    func generateBriefing(allRoutes: Bool = false) async {
+    func generateBriefing(allRoutes: Bool = false, now: Date = Date()) async {
         guard selectedRouteIndex >= 0 else { errorMessage = "Pick a route first."; return }
         guard let selected = selectedRoute, selected.coordinates.count >= 2 else {
             errorMessage = "Find routes first — this saved trip only has a cached briefing."
             return
         }
-        errorMessage = nil
         let indices = (allRoutes ? Array(routes.indices) : [selectedRouteIndex]).filter { routes[$0].coordinates.count >= 2 }
+        // A new briefing for a passed departure would skip its elapsed stops
+        // and show them as failed; underway trips refresh what's ahead.
+        guard plan.departure >= now || indices.allSatisfy({ briefings[$0] != nil }) else {
+            errorMessage = "This departure has passed. Choose Depart today in Plan to brief this route."
+            return
+        }
+        errorMessage = nil
         // Built off-screen: nothing reaches `briefings` (and the UI) until
         // it is complete and persisted.
         var fresh: [Int: Briefing] = [:]
@@ -305,16 +316,20 @@ final class BriefingCoordinator {
             stops: stops0,
             generatedAt: Date()
         )
-        if let existing = briefings[j] {
-            b = existing
-            b.departure = departure ?? plan.departure
-            b.multiDay = plan.multiDay
-        } else if j == selectedRouteIndex && !plan.stopEdits.isEmpty {
+        // Optimizer candidates (`departure != nil`) score planned stops only
+        // (HANDOFF §4), so edits are kept for the user's own briefings.
+        if departure == nil, let existing = briefings[j] {
+            if existing.rangeMi == b.rangeMi && existing.geometry == route {
+                // Same plan: keep the edited itinerary and its cached weather.
+                b = existing
+                b.departure = plan.departure
+                b.multiDay = plan.multiDay
+            } else {
+                // Range or vehicle changed: re-plan, then re-apply the edits.
+                await replayEdits(StopEdits(from: existing), into: &b)
+            }
+        } else if departure == nil && j == selectedRouteIndex && !plan.stopEdits.isEmpty {
             await replayEdits(plan.stopEdits, into: &b)
-        }
-        // Optimizer candidates require a fresh result for their own departure.
-        if departure != nil {
-            for i in b.stops.indices { b.stops[i].weather = nil; b.stops[i].forecastFor = nil }
         }
         guard !b.stops.isEmpty else { return nil }
         b.stops[0].timeZoneID = plan.origin?.timeZoneID
@@ -380,7 +395,8 @@ final class BriefingCoordinator {
     private struct StopFetch: Sendable {
         var index: Int
         var forecast: ForecastResult?
-        var alerts: [WeatherAlert]
+        /// nil when the alert lookup failed (cached alerts are kept).
+        var alerts: [WeatherAlert]?
         /// nil when chargers weren't requested for this stop.
         var chargers: Result<[Charger], ChargerLookupError>?
     }
@@ -431,7 +447,7 @@ final class BriefingCoordinator {
                 if b.stops[i].weather == nil { b.stops[i].horizon = .failed }
                 failed.append(b.stops[i].label)
             }
-            b.stops[i].alerts = r.alerts
+            if let alerts = r.alerts { b.stops[i].alerts = alerts }
             switch r.chargers {
             case nil:
                 break

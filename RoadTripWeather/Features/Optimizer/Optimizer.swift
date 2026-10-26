@@ -51,9 +51,11 @@ struct OptimizerResult: Sendable {
 }
 
 extension BriefingCoordinator {
-    /// Web default window: the planned departure to 12 h later.
+    /// Web default window: the planned departure to 12 h later; a passed
+    /// departure starts the window at the next full hour instead.
     var defaultOptimizerWindow: (start: Date, end: Date) {
-        (plan.departure, plan.departure.addingTimeInterval(12 * 3600))
+        let start = plan.departure >= Date() ? plan.departure : TripPlan.defaultDeparture(timeZone: plan.departureTimeZone)
+        return (start, start.addingTimeInterval(12 * 3600))
     }
 
     /// Routes the optimizer can brief (cached-only placeholders are skipped).
@@ -111,10 +113,15 @@ extension BriefingCoordinator {
 
     /// Adopts a result: its departure (and route) become the plan, then the
     /// briefing is regenerated (web: click a result → regenerate).
-    func adopt(_ cell: OptimizerCell) async {
-        plan.departure = cell.departure
+    func adopt(_ cell: OptimizerCell, now: Date = Date()) async {
+        guard cell.departure >= now else {
+            errorMessage = "That departure has passed. Run the optimizer again for upcoming departures."
+            return
+        }
+        // Every route's briefing follows, like editing the departure in Plan.
+        retime(to: cell.departure)
         if routes.indices.contains(cell.routeIndex) { selectedRouteIndex = cell.routeIndex }
-        await generateBriefing()
+        await generateBriefing(now: now)
     }
 
     static func cell(for b: Briefing, departure: Date, label: String) -> OptimizerCell {

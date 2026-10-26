@@ -40,6 +40,16 @@ struct BriefingAcceptanceTests {
         return c
     }
 
+    @Test func offlineRefreshKeepsCachedAlerts() async throws {
+        let c = try await briefed(makeEnv())
+        let alerts = try #require(c.briefing).alerts
+        try #require(!alerts.isEmpty)
+        net.online = false
+        await c.refreshForecasts()
+        #expect(c.briefing?.alerts == alerts, "a failed lookup is not \"no alerts\"")
+        net.online = true
+    }
+
     // MARK: Task 9 — map colours
 
     @Test func segmentColoursFollowTheScaleAndRecolourWithoutNetwork() async throws {
@@ -280,8 +290,8 @@ struct FakeWeather: WeatherService {
 /// One alert at every stop while online.
 struct FakeAlerts: AlertService {
     let net: FakeNetwork
-    func alerts(at coordinate: Coordinate, eta: Date) async -> [WeatherAlert] {
-        guard net.hit(\.alerts) else { return [] }
+    func alerts(at coordinate: Coordinate, eta: Date) async -> [WeatherAlert]? {
+        guard net.hit(\.alerts) else { return nil }
         return [WeatherAlert(id: "urn:wind", event: "Wind Advisory", severity: .moderate, headline: "h", areaDescription: "Somewhere", onset: eta.addingTimeInterval(-3600), ends: eta.addingTimeInterval(3600))]
     }
 }

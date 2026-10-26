@@ -52,12 +52,12 @@ struct NWSAlertService: AlertService {
         self.statusSink = statusSink
     }
 
-    func alerts(at coordinate: Coordinate, eta: Date) async -> [WeatherAlert] {
+    func alerts(at coordinate: Coordinate, eta: Date) async -> [WeatherAlert]? {
         guard let base = NWSAlertService.base,
               var components = URLComponents(url: base, resolvingAgainstBaseURL: false)
-        else { return [] }
+        else { return nil }
         components.queryItems = [URLQueryItem(name: "point", value: String(format: "%.4f,%.4f", coordinate.latitude, coordinate.longitude))]
-        guard let url = components.url else { return [] }
+        guard let url = components.url else { return nil }
         var request = URLRequest(url: url)
         request.setValue(userAgent, forHTTPHeaderField: "User-Agent")
         request.setValue("application/geo+json", forHTTPHeaderField: "Accept")
@@ -72,7 +72,7 @@ struct NWSAlertService: AlertService {
             return matched
         } catch {
             statusSink?(.failure(error))
-            return []
+            return nil
         }
     }
 

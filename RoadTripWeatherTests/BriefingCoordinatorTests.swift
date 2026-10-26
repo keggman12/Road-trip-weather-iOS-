@@ -117,14 +117,50 @@ struct BriefingCoordinatorTests {
         let edited = try #require(c.briefing)
         await c.generateBriefing()
         #expect(c.briefing?.stops.map(\.id) == edited.stops.map(\.id))
+        // The optimizer scores planned stops only (HANDOFF §4).
         let candidate = try #require(await c.brief(routeIndex: c.selectedRouteIndex, label: "Candidate", departure: c.plan.departure.addingTimeInterval(3600), progress: { _, _ in }))
-        #expect(candidate.stops.map(\.id) == edited.stops.map(\.id))
+        #expect(candidate.stops.count == initial.stops.count)
+        #expect(!candidate.stops.contains { $0.kind.isUserAdded || $0.dwellMinutes == 75 })
+        #expect(c.briefing?.stops.map(\.id) == edited.stops.map(\.id), "scoring a candidate leaves the briefing alone")
         let cell = BriefingCoordinator.cell(for: candidate, departure: candidate.departure, label: "Candidate")
         await c.adopt(cell)
         #expect(c.briefing?.stops.map(\.id) == edited.stops.map(\.id))
         #expect(c.briefing?.stops.first(where: { $0.id == id })?.dwellMinutes == 75)
         #expect(c.briefing?.stops.first(where: { $0.id == id })?.manualOvernight == true)
         #expect(c.briefing?.removedMi == edited.removedMi)
+    }
+
+    @Test func rangeChangeReplansAndKeepsUserStops() async throws {
+        let c = try makeCoordinator()
+        await c.findRoutes()
+        await c.generateBriefing()
+        let initial = try #require(c.briefing)
+        await c.addStop(ManualStopEdit(coordinate: initial.stops[1].coordinate, label: "Lunch"))
+        c.plan.rangeMi = 400
+        await c.generateBriefing()
+        let replanned = try #require(c.briefing)
+        #expect(replanned.rangeMi == 400)
+        #expect(replanned.stops.filter { !$0.kind.isUserAdded }.count < initial.stops.count, "fewer stops at a longer range")
+        #expect(replanned.stops.contains { $0.kind.isUserAdded && $0.label == "Lunch" })
+    }
+
+    @Test func newBriefingForPassedDepartureIsRefused() async throws {
+        let c = try makeCoordinator()
+        await c.findRoutes()
+        await c.generateBriefing(now: c.plan.departure.addingTimeInterval(60))
+        #expect(c.briefing == nil)
+        #expect(c.errorMessage?.contains("Depart today") == true)
+    }
+
+    @Test func adoptingAPassedDepartureIsRefused() async throws {
+        let c = try makeCoordinator()
+        await c.findRoutes()
+        await c.generateBriefing()
+        let b = try #require(c.briefing)
+        let cell = BriefingCoordinator.cell(for: b, departure: b.departure.addingTimeInterval(-3600), label: "Past")
+        await c.adopt(cell)
+        #expect(c.plan.departure == b.departure)
+        #expect(c.errorMessage != nil)
     }
 
     @Test func incompleteCandidatesCannotBeRecommended() async throws {
