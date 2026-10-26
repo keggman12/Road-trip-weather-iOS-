@@ -117,6 +117,10 @@ final class BriefingCoordinator {
                     points.append(picked)
                     continue
                 }
+                if let pin = await droppedPin(t) {
+                    points.append(pin)
+                    continue
+                }
                 env.status.countCall(.mapkit)
                 points.append(try await env.geocoding.geocode(t))
             }
@@ -125,14 +129,15 @@ final class BriefingCoordinator {
             // creates a new trip instead of overwriting the old one.
             if let trip = loadedTrip, !Self.matches(trip, texts: texts) { loadedTrip = nil }
             placeNotices = zip(texts, points).compactMap { query, place in
-                pickedPlaces[query] == nil && PlaceMatch.isLikelyMismatch(query: query, label: place.label) ? PlaceMatch.notice(query: query, label: place.label) : nil
+                pickedPlaces[query] == nil && DroppedPin.coordinate(fromQuery: query) == nil
+                    && PlaceMatch.isLikelyMismatch(query: query, label: place.label) ? PlaceMatch.notice(query: query, label: place.label) : nil
             }
             plan.origin = first
             plan.destination = last
             plan.vias = Array(points.dropFirst().dropLast())
             if let tz = first.timeZoneID { plan.departureTimeZoneID = tz }
             // Geocoding succeeded — worth remembering (web `rememberLocations`).
-            for t in texts { env.settings.remember(t) }
+            for t in texts where DroppedPin.coordinate(fromQuery: t) == nil { env.settings.remember(t) }
 
             phase = .routing
             env.status.countCall(.mapkit)
@@ -152,6 +157,50 @@ final class BriefingCoordinator {
     /// Remembers a place the user picked; its `query` is the field's new text.
     func pick(_ place: PlacePoint) {
         pickedPlaces[place.query.trimmingCharacters(in: .whitespaces)] = place
+    }
+
+    // MARK: Dropped-pin via-points
+
+    /// A "lat, lon" query (a dropped pin, or typed coordinates) resolved
+    /// without geocoding by name: the plan's existing point keeps its label,
+    /// otherwise one reverse geocode names it "Pin near Rye, CO".
+    private func droppedPin(_ query: String) async -> PlacePoint? {
+        guard let c = DroppedPin.coordinate(fromQuery: query) else { return nil }
+        let known = [plan.origin, plan.destination].compactMap { $0 } + plan.vias
+        if let p = known.first(where: { $0.query == query }) { return p }
+        let info = await env.timeZones.place(at: c)
+        return PlacePoint(query: query, label: DroppedPin.label(near: info?.town ?? info?.county, state: info?.state, coordinate: c), coordinate: c, timeZoneID: info?.timeZone?.identifier)
+    }
+
+    /// Long-press on the Routes map: a via-point at `coordinate`, slotted
+    /// between the points it detours least, then routes are found again
+    /// (which clears this search's briefings, like any new search).
+    func addViaPin(at coordinate: Coordinate) async {
+        guard !isBusy, coordinate.isValid else { return }
+        let query = DroppedPin.query(for: coordinate)
+        guard !plan.viaTexts.contains(query), let pin = await droppedPin(query) else { return }
+        pick(pin)
+        // Typed rows that are still blank, or edited since the last search,
+        // have no coordinate to compare against; then the pin goes last.
+        let filled = plan.viaEntries.indices.filter { !plan.viaEntries[$0].text.trimmingCharacters(in: .whitespaces).isEmpty }
+        var at = plan.viaEntries.count
+        if let origin = plan.origin, let destination = plan.destination,
+           filled.count == plan.vias.count,
+           zip(filled, plan.vias).allSatisfy({ plan.viaEntries[$0].text.trimmingCharacters(in: .whitespaces) == $1.query }) {
+            let k = DroppedPin.insertionIndex(of: coordinate, origin: origin.coordinate, vias: plan.vias.map(\.coordinate), destination: destination.coordinate)
+            at = k < filled.count ? filled[k] : plan.viaEntries.count
+        }
+        plan.viaEntries.insert(ViaEntry(text: query), at: at)
+        await findRoutes()
+    }
+
+    /// Removes a via-point (pinned or typed) by its query and finds routes again.
+    func removeVia(query: String) async {
+        guard !isBusy else { return }
+        let before = plan.viaEntries.count
+        plan.viaEntries.removeAll { $0.text.trimmingCharacters(in: .whitespaces) == query }
+        guard plan.viaEntries.count != before else { return }
+        await findRoutes()
     }
 
     func selectRoute(_ index: Int) {
