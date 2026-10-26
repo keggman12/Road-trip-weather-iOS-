@@ -145,8 +145,8 @@ Done so far, all with tests:
 Open:
 1. **Superchargers with a real OCM key**: add one in Settings, pick the Tesla vehicle, brief a
    route, and confirm the "⚡ Supercharger" line on stop cards and the Data Sources row.
-2. **TestFlight**: builds 0.1.0 (2)–(4) are uploaded. 2 and 3 are internal-only; **4 is the
-   first build that external testers can get** (`testFlightInternalTestingOnly` is now `false`).
+2. **TestFlight**: builds 0.1.0 (2)–(5) are uploaded. 2 and 3 are internal-only; **4 is the
+   first build that external testers can get** (5 adds via pins/stops and the #14–#15 fixes) (`testFlightInternalTestingOnly` is now `false`).
    To share with external testers: fill in Test Information, create an External Testing
    group, add build 4 and submit it for Beta App Review. Bump
    `CURRENT_PROJECT_VERSION` in `project.yml` for each upload; see `tools/testflight/README.md`.

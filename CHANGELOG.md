@@ -3,6 +3,35 @@
 Changes in user-visible behavior, written so the Android port can match them.
 Each entry names the iOS issue/PR. Platform details are in brackets.
 
+## TestFlight 0.1.0 build 5
+
+### Added
+- **Drop a pin to add a via-point** (PR #16). On the Routes map, long-press and confirm "Add
+  via-point and find routes"; routes are found again through that spot. Tap a pin to remove it.
+  Several pins are allowed; each slots in between the points it detours least. A pin's text is
+  its coordinate ("38.05412, -104.98761"), labelled "Pin near Pueblo, CO" by reverse geocoding,
+  so it survives saved trips without geocoding by name. "lat, lon" typed in any place field
+  resolves the same way. Pins stay out of recents and mismatch notices.
+- **Every via-point is a stop with its own weather** (PR #16, owner decision). Typed vias and
+  pins become VIA stops on the routes chained through them, forecast at the via's own
+  coordinate ("Via-point · 3.2 mi off route"), dwell 0, removed with the via-point (no Remove
+  button on the card). Direct/alternate/suggested routes don't get them.
+  *Port note:* not on Android yet; Android's picked-places pattern and OSRM routing take it
+  directly (OSRM accepts waypoints in one request).
+
+### Fixed
+- **Weather and itinerary fixes** (PR #14) and their follow-ups (PR #15):
+  - A failed refresh keeps cached forecasts and alerts and says how many failed; missing
+    forecasts can't win the optimizer's Best badge.
+  - Regenerate keeps the edited itinerary, but re-plans when the range/vehicle changed, keeping
+    added stops and removals. The optimizer scores planned stops only (§4).
+  - Past departures: Plan rejects them and offers Depart today; a new briefing or an optimizer
+    result for a passed departure is refused; underway trips refresh upcoming stops only; ETAs
+    over an hour past get no forecast (WeatherKit used to crash or return the current hour).
+  - Manual stops keep the address's coordinates for weather and navigation.
+  - The weekly POI refresh runs in the foreground when due; an interrupted one stays due.
+  *Port note:* Android has these in its PRs #8 and #9.
+
 ## Unreleased (TestFlight 0.1.0 builds 2–4)
 
 ### Distribution
